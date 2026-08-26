@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api.routes import admin, factcheck, feed, graph, journey, kyc, voice
+from .api.routes import admin, factcheck, feed, graph, journey, kyc, ops, voice
 from .core.errors import ERROR_MAP, PipelineError
 from .store.db import get_store
 
@@ -36,10 +36,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ThreatHunter360",
-    version="1.0.0",
-    description=("Inductive-logic intelligence platform: Fact Checker, "
-                 "Journey Advisor, KYC Verification — evidence-based "
-                 "conclusions, honest uncertainty, provenance everywhere."),
+    version="3.0.0",
+    description=("SOVEREIGN FUSION: governed agent swarm + conversational "
+                 "cortex. Fact Checker, Journey Advisor, KYC Verification, "
+                 "PATHFINDER orchestration, VOYAGER/SENTINEL/HUNTER/AUDITOR "
+                 "agents, Evidence & Trust Layer — evidence-based "
+                 "conclusions, honest uncertainty, provenance everywhere, "
+                 "humans in command."),
     lifespan=lifespan,
 )
 
@@ -84,12 +87,15 @@ async def readyz():
 async def root():
     return {
         "product": "ThreatHunter360",
-        "modules": ["factcheck", "journey", "kyc"],
+        "version": "3.0.0 SOVEREIGN FUSION",
+        "modules": ["factcheck", "journey", "kyc", "ops-node", "cortex"],
+        "agents": ["VOYAGER", "SENTINEL", "SENTINEL_FORENSICS", "HUNTER",
+                   "AUDITOR"],
         "docs": "/docs",
-        "spec": "ThreatHunter360 — Automated Data Scraping & Content "
-                "Extraction Architecture.md",
+        "spec": "ThreatHunter360 v3.0 — SOVEREIGN FUSION Upgrade "
+                "Specification.md",
     }
 
 
-for module in (factcheck, journey, kyc, feed, graph, voice, admin):
+for module in (factcheck, journey, kyc, feed, graph, voice, admin, ops):
     app.include_router(module.router)

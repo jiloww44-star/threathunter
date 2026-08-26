@@ -55,4 +55,14 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "Evidence shown is from the last successful fetch (staleness visible)",
         "Wait for the budget window to reset or upgrade the source tier",
     ),
+    "TREE_NOT_FOUND": (  # v3.0 ops
+        "No task tree exists for that id",
+        "The Strategy Map cannot be displayed",
+        "Run a goal first, or check the id in the Swarm Timeline",
+    ),
+    "AGENT_NOT_FOUND": (
+        "No agent is registered under that id",
+        "The governance operation cannot proceed",
+        "Register the agent via the SDK endpoint first (§5.2)",
+    ),
 }

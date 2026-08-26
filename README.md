@@ -62,21 +62,67 @@ cd backend && python -m pytest tests
 | Part 12 — evidence graph | `GET /api/v1/graph/case/{id}` → `EvidenceGraph.tsx` (COPIED_FROM edges visualized in red) |
 | Part 13 — multi-tenant | `api/deps.py` tenant resolution; demo enterprise key `sk_demo_threathunter360` |
 | Part 2 — React dashboard | `frontend/src/` — home, ClaimInput (280-char counter), LoadingStages, progressive-disclosure result, RiskTimeline, KYCFlow, dark design tokens, `prefers-reduced-motion` respected |
+| **v3.0** A-02 PATHFINDER mesh | `backend/app/swarm/pathfinder.py` — RGD goal → TaskTreeJSON → parallel branch execution → UnifiedReport; 2N peer registry + store-persisted task transitions = resumable failover (§3.3) |
+| **v3.0** §3.1 Conversational Cortex | `backend/app/swarm/cortex.py` — dialogue over RGD, context object retention, minimal clarifying questions (§14–15), live progress narration (§21) |
+| **v3.0** §5.1/A-03..A-06 agents | `backend/app/swarm/agents/` — VOYAGER (journey restoration + live monitoring), SENTINEL (CVE scan → VPR → human-gated patching), SENTINEL Forensics (A-04), HUNTER (OSINT over evidence graph, honest coverage gaps), AUDITOR (PII masking · screening · `authorize_action` · immutable trail) |
+| **v3.0** §3.2/§1.10 Trust Layer | `backend/app/core/trust_layer.py` — shared evidence graph, global contradiction monitor, label separation (§26), continual reassessment → verdict/risk-change notifications (wired post-ingest, §20-guarded) |
+| **v3.0** A-14/§5.2 governance | `backend/app/swarm/registry.py` — function allowlists architectural; SDK custom agents admitted via AUDITOR gate into SHADOW mode until human promotion |
+| **v3.0** A-01/A-15 Ops Node | `frontend/src/views/OpsNode.tsx` — Cortex chat, Strategy Map, Swarm Timeline/Task Matrix, verdict-change alerts, Intel Feed (v1 §3 restored), Sovereign KPIs (§3.3 metrics) |
 
 ## Repo layout
 
 ```
 backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
-  app/api/routes/  factcheck · journey · kyc · feed · graph · voice
+  app/api/routes/  factcheck · journey · kyc · feed · graph · voice · admin · ops
   app/core/        reasoning_engine · confidence · contradictions · journey · kyc
+                    · trust_layer (v3.0) · review_routing
+  app/swarm/       v3.0 — pathfinder · cortex · registry · agents/{voyager,
+                    sentinel, hunter, auditor}
   app/scraper/     fetcher · extractor (JSON-LD first) · dedupe (simhash) · orchestrator
-  app/store/       evidence/signals/hypotheses/checks/review_queue repository
-  tests/           27 tests (engine / journey / kyc / API integration)
+  app/store/       evidence/signals/hypotheses/checks/review_queue +
+                    v3.0 ops_trees/ops_tasks/notifications/audit_trail/
+                    custom_agents/journey_watches
+  tests/           96 tests (engine / journey / kyc / API / geo / governance /
+                    sovereign-fusion suites)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
+  src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)
+                    + v3.0 asset_inventory/cve_feed fixtures
 scripts/           run_demo.sh
 docker-compose.yml Production topology (api/worker/beat/db/redis)
 ```
+
+## v3.0 SOVEREIGN FUSION (upgrade spec → this build)
+
+Master spec: [`ThreatHunter360 v3.0 — SOVEREIGN FUSION Upgrade Specification.md`](ThreatHunter360%20v3.0%20—%20SOVEREIGN%20FUSION%20Upgrade%20Specification.md).
+Release plan §8 status in this build: **P1 Foundations ✅ · P2 Restoration ✅ ·
+P3 Intelligence ✅ · P4 — SDK shadow-mode ✅; privacy/a11y parity partially
+(policies in TRUST.md; a11y budget in UI v2 tokens); hyperscale certification
+remains a production-phase item.**
+
+Try it (Ops Node → #/ops):
+
+```bash
+curl -X POST localhost:8000/api/v1/ops/goal -H 'Content-Type: application/json' \
+  -d '{"goal":"Secure the Lagos IoT deployment — scan for vulnerabilities"}'
+# → UnifiedReport: 14 findings, P1 ticket in the human queue, patch request
+#   parked AWAITING_HUMAN (AUDITOR authorize_action = REQUIRE_HUMAN)
+
+curl -X POST localhost:8000/api/v1/cortex/chat -H 'Content-Type: application/json' \
+  -d '{"session_id":"demo-1","message":"I am travelling tomorrow"}'
+# → "Where are you leaving from, and where are you headed?" (context retained)
+
+curl -X POST localhost:8000/api/v1/ops/reassess
+# → §1.10 continual reassessment: fired notifications on any verdict/risk drift
+```
+
+Canonical invariants the v3.0 suite enforces (24 tests, `tests/test_sovereign_fusion.py`):
+every UnifiedReport carries the §6 spine; A-14 dispatch outside an allowlist is
+BLOCKED and audited; patching never executes autonomously; SHADOW agents cannot
+execute until a human promotes them; missing feeds degrade to classified
+`SOURCE_UNAVAILABLE`, never fabricated findings; journey watches and open
+checks re-test on new evidence and notify on drift.
+
 
 ## Free-Tier Stack Integration (spec §1–§4)
 

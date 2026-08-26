@@ -4,12 +4,13 @@ import { FactChecker } from "./views/FactChecker";
 import { JourneyAdvisor } from "./views/JourneyAdvisor";
 import { KYCFlow } from "./views/KYCFlow";
 import { Analytics } from "./views/Analytics";
+import { OpsNode } from "./views/OpsNode";
 
-type Route = "home" | "fact-check" | "journey" | "kyc" | "analytics";
+type Route = "home" | "ops" | "fact-check" | "journey" | "kyc" | "analytics";
 
 function routeFromHash(): Route {
   const h = window.location.hash.replace("#/", "");
-  return (["fact-check", "journey", "kyc", "analytics"] as Route[]).includes(h as Route)
+  return (["ops", "fact-check", "journey", "kyc", "analytics"] as Route[]).includes(h as Route)
     ? (h as Route)
     : "home";
 }
@@ -34,6 +35,9 @@ export default function App() {
           </span>
         </div>
         <nav className="nav" aria-label="Main modules">
+          <a href="#/ops" className={route === "ops" ? "active" : ""}>
+            ◈ Ops Node
+          </a>
           <a href="#/" className={route === "home" ? "active" : ""}>Home</a>
           <a href="#/fact-check" className={route === "fact-check" ? "active" : ""}>
             Fact Checker
@@ -50,6 +54,7 @@ export default function App() {
 
       <main id="main">
         {route === "home" && <Home />}
+        {route === "ops" && <OpsNode />}
         {route === "fact-check" && <FactChecker />}
         {route === "journey" && <JourneyAdvisor />}
         {route === "kyc" && <KYCFlow />}
@@ -57,8 +62,9 @@ export default function App() {
       </main>
 
       <footer className="footer-note">
-        ThreatHunter360 demo profile — evidence-based conclusions, honest
-        uncertainty, provenance everywhere, humans in the loop. Trust labels:
+        ThreatHunter360 v3.0 SOVEREIGN FUSION demo profile — evidence-based
+        conclusions, honest uncertainty, provenance everywhere, humans in
+        command. Trust labels:
         <span className="trust-tag tag-fact" style={{ marginLeft: 8 }}>FACT</span>
         <span className="trust-tag tag-inference">INFERENCE</span>
       </footer>

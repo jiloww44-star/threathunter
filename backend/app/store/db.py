@@ -117,6 +117,83 @@ CREATE TABLE IF NOT EXISTS budget_tx (      -- LLM/Firecrawl spend ledger
 CREATE INDEX IF NOT EXISTS idx_budget_tx_purpose ON budget_tx(purpose, created_at);
 """
 
+# v3.0 SOVEREIGN FUSION schema (spec §2 architecture / §8 P1-P3) — PATHFINDER
+# task trees, Trust Layer notifications (§1.10), AUDITOR trail (A-06),
+# custom-agent SDK registry (§5.2), VOYAGER journey watches (§5.1).
+_V3_SCHEMA = """
+CREATE TABLE IF NOT EXISTS ops_trees (              -- TaskTreeJSON (A-02)
+    tree_id TEXT PRIMARY KEY,
+    goal TEXT,
+    status TEXT,          -- RUNNING | COMPLETE | DEGRADED | FAILED | AWAITING_HUMAN
+    dispatch_plan TEXT,   -- JSON DispatchPlan
+    report_json TEXT,     -- UnifiedReport (canonical spine, spec §6)
+    peer_id TEXT,         -- orchestrator peer owning execution (§3.3)
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ops_tasks (
+    task_id TEXT PRIMARY KEY,
+    tree_id TEXT REFERENCES ops_trees(tree_id),
+    parent_id TEXT,                                 -- RGD decomposition edge
+    agent TEXT,           -- SENTINEL | HUNTER | AUDITOR | VOYAGER | custom
+    function TEXT,        -- MUST be inside the agent allowlist (A-14)
+    title TEXT,
+    status TEXT,          -- PENDING | RUNNING | COMPLETE | DEGRADED |
+                          -- FAILED | BLOCKED | AWAITING_HUMAN
+    classified_error TEXT,                          -- §20 error class
+    result_json TEXT,
+    started_at TEXT,
+    ended_at TEXT,
+    position INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ops_tasks_tree ON ops_tasks(tree_id);
+
+CREATE TABLE IF NOT EXISTS notifications (   -- §1.10 verdict-change alerts
+    id TEXT PRIMARY KEY,
+    kind TEXT,            -- VERDICT_CHANGE | RISK_ELEVATION | RISK_RESOLUTION | GOVERNANCE
+    title TEXT,
+    body TEXT,
+    ref TEXT,             -- check_id | watch_id | tree_id
+    created_at TEXT,
+    acknowledged INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS audit_trail (          -- A-06 AUDITOR ledger
+    id TEXT PRIMARY KEY,
+    actor TEXT,           -- agent or user making the request
+    action TEXT,          -- governed action attempted
+    decision TEXT,        -- ALLOW | DENY | REQUIRE_HUMAN
+    detail TEXT,
+    policy_version TEXT,  -- sovereign policy version (§5.2)
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS custom_agents (        -- A-13 / §5.2 SDK registry
+    agent_id TEXT PRIMARY KEY,
+    name TEXT,
+    functions_json TEXT,  -- declared api_functions allowlist (A-14)
+    status TEXT,          -- SHADOW | ACTIVE | REJECTED
+    shadow_tree_count INTEGER DEFAULT 0,
+    drift_notes TEXT,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS journey_watches (   -- VOYAGER monitor_active_journey
+    watch_id TEXT PRIMARY KEY,
+    origin TEXT,
+    destination TEXT,
+    departure_time TEXT,
+    priority TEXT DEFAULT 'balanced',
+    baseline_risk TEXT,
+    current_risk TEXT,
+    status TEXT DEFAULT 'MONITORING',  -- MONITORING | ELEVATED | CLOSED
+    tolerance TEXT DEFAULT 'MODERATE', -- §3.4 notification threshold (presentation only)
+    created_at TEXT,
+    updated_at TEXT
+);
+"""
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -132,6 +209,7 @@ class EvidenceStore:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(_SCHEMA)
+            self._conn.executescript(_V3_SCHEMA)   # v3.0 SOVEREIGN FUSION
             self._migrate()
             self._conn.commit()
 
@@ -645,6 +723,238 @@ class EvidenceStore:
                 entry["llm_cost_usd"] > 0.5 and entry["checks_total"] <= 2)
             out.append(entry)
         return out
+
+    # ====================================== v3.0 SOVEREIGN FUSION stores ==
+
+    # ------------------------------------------------ PATHFINDER trees ----
+    def create_tree(self, tree_id: str, goal: str, dispatch_plan: dict,
+                    peer_id: str):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO ops_trees(tree_id, goal, status, dispatch_plan,
+                       peer_id, created_at, updated_at)
+                   VALUES (?,?, 'RUNNING', ?,?,?,?)""",
+                (tree_id, goal, json.dumps(dispatch_plan), peer_id,
+                 _now(), _now()))
+            self._conn.commit()
+
+    def update_tree(self, tree_id: str, status: str | None = None,
+                    report: dict | None = None, peer_id: str | None = None):
+        with self._lock:
+            if status is not None:
+                self._conn.execute(
+                    "UPDATE ops_trees SET status=?, updated_at=? WHERE tree_id=?",
+                    (status, _now(), tree_id))
+            if report is not None:
+                self._conn.execute(
+                    "UPDATE ops_trees SET report_json=?, updated_at=? "
+                    "WHERE tree_id=?",
+                    (json.dumps(report), _now(), tree_id))
+            if peer_id is not None:
+                self._conn.execute(
+                    "UPDATE ops_trees SET peer_id=?, updated_at=? "
+                    "WHERE tree_id=?", (peer_id, _now(), tree_id))
+            self._conn.commit()
+
+    def get_tree(self, tree_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM ops_trees WHERE tree_id=?",
+                (tree_id,)).fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        d["dispatch_plan"] = json.loads(d.get("dispatch_plan") or "{}")
+        d["report"] = json.loads(d.get("report_json") or "null")
+        d.pop("report_json", None)
+        d["tasks"] = self.tasks_for_tree(tree_id)
+        return d
+
+    def list_trees(self, limit: int = 20) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT tree_id, goal, status, peer_id, created_at, updated_at "
+                "FROM ops_trees ORDER BY created_at DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------ PATHFINDER tasks ----
+    def upsert_task(self, task: dict):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO ops_tasks(task_id, tree_id, parent_id, agent,
+                       function, title, status, classified_error, result_json,
+                       started_at, ended_at, position)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(task_id) DO UPDATE SET
+                     status=excluded.status,
+                     classified_error=excluded.classified_error,
+                     result_json=excluded.result_json,
+                     started_at=excluded.started_at,
+                     ended_at=excluded.ended_at""",
+                (task["task_id"], task["tree_id"], task.get("parent_id"),
+                 task["agent"], task["function"], task.get("title", ""),
+                 task.get("status", "PENDING"), task.get("classified_error"),
+                 json.dumps(task.get("result") or {}),
+                 task.get("started_at"), task.get("ended_at"),
+                 task.get("position", 0)))
+            self._conn.commit()
+
+    def tasks_for_tree(self, tree_id: str) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM ops_tasks WHERE tree_id=? ORDER BY position",
+                (tree_id,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["result"] = json.loads(d.get("result_json") or "{}")
+            d.pop("result_json", None)
+            out.append(d)
+        return out
+
+    def all_tasks(self, limit: int = 500) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM ops_tasks ORDER BY started_at DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    # --------------------------------------- Trust Layer notifications ----
+    def notify(self, kind: str, title: str, body: str, ref: str | None = None
+               ) -> str:
+        nid = str(uuid.uuid4())
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO notifications(id, kind, title, body, ref,
+                       created_at) VALUES (?,?,?,?,?,?)""",
+                (nid, kind, title, body, ref, _now()))
+            self._conn.commit()
+        return nid
+
+    def list_notifications(self, limit: int = 25) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    # --------------------------------------------------- AUDITOR trail ----
+    def audit(self, actor: str, action: str, decision: str, detail: str,
+              policy_version: str) -> str:
+        aid = str(uuid.uuid4())
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO audit_trail(id, actor, action, decision, detail,
+                       policy_version, created_at) VALUES (?,?,?,?,?,?,?)""",
+                (aid, actor, action, decision, detail, policy_version, _now()))
+            self._conn.commit()
+        return aid
+
+    def audit_trail(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM audit_trail ORDER BY created_at DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    # -------------------------------------- Custom agent SDK (§5.2/A-13) ----
+    def register_custom_agent(self, agent_id: str, name: str,
+                              functions: list[str], status: str,
+                              drift_notes: str | None = None):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO custom_agents(agent_id, name, functions_json,
+                       status, drift_notes, created_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (agent_id, name, json.dumps(functions), status, drift_notes,
+                 _now()))
+            self._conn.commit()
+
+    def get_custom_agent(self, agent_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM custom_agents WHERE agent_id=?",
+                (agent_id,)).fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        d["functions"] = json.loads(d.get("functions_json") or "[]")
+        d.pop("functions_json", None)
+        return d
+
+    def list_custom_agents(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM custom_agents ORDER BY created_at DESC").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["functions"] = json.loads(d.get("functions_json") or "[]")
+            d.pop("functions_json", None)
+            out.append(d)
+        return out
+
+    def update_custom_agent(self, agent_id: str, status: str | None = None,
+                            shadow_tree_count: int | None = None,
+                            drift_notes: str | None = None):
+        with self._lock:
+            if status is not None:
+                self._conn.execute(
+                    "UPDATE custom_agents SET status=? WHERE agent_id=?",
+                    (status, agent_id))
+            if shadow_tree_count is not None:
+                self._conn.execute(
+                    "UPDATE custom_agents SET shadow_tree_count=? "
+                    "WHERE agent_id=?", (shadow_tree_count, agent_id))
+            if drift_notes is not None:
+                self._conn.execute(
+                    "UPDATE custom_agents SET drift_notes=? WHERE agent_id=?",
+                    (drift_notes, agent_id))
+            self._conn.commit()
+
+    # ------------------------------ VOYAGER journey watches (§5.1/P3) ----
+    def add_watch(self, watch_id: str, origin: str, destination: str,
+                  departure_time: str, baseline_risk: str,
+                  priority: str = "balanced", tolerance: str = "MODERATE"):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO journey_watches(watch_id, origin, destination,
+                       departure_time, priority, baseline_risk, current_risk,
+                       tolerance, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (watch_id, origin, destination, departure_time, priority,
+                 baseline_risk, baseline_risk, tolerance, _now(), _now()))
+            self._conn.commit()
+
+    def get_watch(self, watch_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM journey_watches WHERE watch_id=?",
+                (watch_id,)).fetchone()
+        return dict(r) if r else None
+
+    def list_watches(self, active_only: bool = True) -> list[dict]:
+        sql = "SELECT * FROM journey_watches"
+        if active_only:
+            sql += " WHERE status IN ('MONITORING','ELEVATED')"
+        sql += " ORDER BY created_at DESC"
+        with self._lock:
+            rows = self._conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_watch(self, watch_id: str, current_risk: str | None = None,
+                     status: str | None = None):
+        with self._lock:
+            if current_risk is not None:
+                self._conn.execute(
+                    "UPDATE journey_watches SET current_risk=?, updated_at=? "
+                    "WHERE watch_id=?", (current_risk, _now(), watch_id))
+            if status is not None:
+                self._conn.execute(
+                    "UPDATE journey_watches SET status=?, updated_at=? "
+                    "WHERE watch_id=?", (status, _now(), watch_id))
+            self._conn.commit()
 
     # ------------------------------------------------------- maintenance --
     def expire_raw_content(self, retention_days: int):

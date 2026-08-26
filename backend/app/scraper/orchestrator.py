@@ -64,12 +64,26 @@ async def run_pipeline(store: EvidenceStore | None = None,
     except Exception as e:  # health scoring may never break ingestion (§20)
         log.warning("source health scoring degraded: %s", e)
 
+    # v3.0 §3.2/§1.10 — event-driven continual reassessment: new evidence
+    # re-tests journey watches and open hypotheses; notifications fire on
+    # change (P3 exit criterion). §20-guarded: never breaks ingestion.
+    reassess_notifications = 0
+    try:
+        from ..core.trust_layer import reassess_after_ingest
+        before = len(store.list_notifications(limit=200))
+        reassess_after_ingest(store)
+        reassess_notifications = max(
+            0, len(store.list_notifications(limit=200)) - before)
+    except Exception as e:
+        log.warning("continual reassessment degraded: %s", e)
+
     stats = {
         "sources_attempted": len(sources),
         "sources_ok": len(evidence),
         "signals_stored": inserted,
         "independent_groups_detected": len(copy_groups),
         "source_health_actions": health_actions,
+        "reassess_notifications": reassess_notifications,  # v3.0 §1.10
     }
     log.info("pipeline run complete: %s", stats)
     return stats

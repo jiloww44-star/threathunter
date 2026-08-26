@@ -197,3 +197,112 @@ export interface AnalyticsSummary {
     by_purpose_usd: Record<string, number>;
   };
 }
+
+// ---------------- v3.0 SOVEREIGN FUSION (Ops Node, spec §2/§3/§6) ---------
+export type TaskStatus =
+  | "PENDING" | "RUNNING" | "COMPLETE" | "DEGRADED" | "FAILED"
+  | "BLOCKED" | "AWAITING_HUMAN";
+
+export interface OpsTask {
+  task_id: string;
+  tree_id: string;
+  parent_id?: string | null;
+  agent: string;
+  function: string;
+  title: string;
+  status: TaskStatus;
+  classified_error?: string | null;
+  result: Record<string, unknown>;
+  started_at?: string | null;
+  ended_at?: string | null;
+  position: number;
+}
+
+export interface TreeSummary {
+  tree_id: string;
+  goal: string;
+  status: string;
+  peer_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StrategyMap extends TreeSummary {
+  dispatch_plan: Record<string, unknown>;
+  report?: UnifiedReport | null;
+  tasks: OpsTask[];
+}
+
+export interface UnifiedReport {
+  answer: string;
+  confidence: Confidence;
+  key_evidence: Array<{ trust_label: string; agent: string; text: string }>;
+  contradictions: Array<{
+    trust_label: string; agent: string; description: string; severity: string;
+  }>;
+  interpretation: string;
+  recommended_action: string;
+  sources: { agents_consulted: string[]; policy_version: string };
+  what_would_change_conclusion: string;
+  trust_labels: string[];
+  compliance_notices: string[];
+  degraded: Array<{
+    agent: string; function: string; state: TaskStatus;
+    classified_error?: string | null; note: string;
+  }>;
+  tree_status: string;
+  tree_id: string;
+  goal: string;
+  peer_id: string;
+}
+
+export interface CortexReply {
+  text: string;
+  question: string | null;
+  context: Record<string, string | null>;
+  tree_id: string | null;
+  confidence?: Confidence;
+  report?: UnifiedReport;
+  progress: string[];
+  speakable?: boolean;
+}
+
+export interface AgentInfo {
+  agent_id: string;
+  name: string;
+  role: string;
+  description: string;
+  api_functions: string[];
+  native: boolean;
+  status: string;
+  policy_version: string;
+  shadow_tree_count?: number;
+}
+
+export interface OpsNotification {
+  id: string;
+  kind: "VERDICT_CHANGE" | "RISK_ELEVATION" | "RISK_RESOLUTION" | "GOVERNANCE";
+  title: string;
+  body: string;
+  ref?: string | null;
+  created_at: string;
+}
+
+export interface OpsKpis {
+  tasks_total: number;
+  task_status_mix: Record<string, number>;
+  per_agent: Record<string, { tasks: number; avg_latency_s: number }>;
+  tree_outcomes: Record<string, number>;
+  mesh_failovers: number;
+  review_queue_depth: number;
+  notifications_total: number;
+  policy_version: string;
+}
+
+export interface MeshStatus {
+  peers: Array<{ peer_id: string; role: string; alive: boolean }>;
+  primary: string;
+  peer_count: number;
+  failovers: number;
+  policy_version: string;
+}

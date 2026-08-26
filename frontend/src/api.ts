@@ -1,7 +1,9 @@
 // API client — relative paths only; the Vite dev proxy forwards /api → :8000
 import type {
-  AnalyticsSummary, FactCheckResponse, GraphData, JourneyResponse,
-  KYCResponse, KYCFixture, RecentCheck, Statistics,
+  AgentInfo, AnalyticsSummary, CortexReply, FactCheckResponse, GraphData,
+  JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
+  OpsNotification, RecentCheck, Statistics, StrategyMap, TreeSummary,
+  UnifiedReport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -67,6 +69,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ result }),
     }),
+
+  // ---- v3.0 SOVEREIGN FUSION — Unified Ops Node (spec §2/A-01) ----
+  cortexChat: (sessionId: string, message: string) =>
+    request<CortexReply>("/api/v1/cortex/chat", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, message }),
+    }),
+  opsGoal: (goal: string) =>
+    request<UnifiedReport>("/api/v1/ops/goal", {
+      method: "POST",
+      body: JSON.stringify({ goal }),
+    }),
+  opsTree: (treeId: string) =>
+    request<StrategyMap>(`/api/v1/ops/tree/${treeId}`),
+  opsTrees: () => request<{ trees: TreeSummary[] }>("/api/v1/ops/trees"),
+  opsResume: (treeId: string) =>
+    request<UnifiedReport>(`/api/v1/ops/tree/${treeId}/resume`, {
+      method: "POST",
+    }),
+  opsMesh: () => request<MeshStatus>("/api/v1/ops/mesh"),
+  opsAgents: () =>
+    request<{ agents: AgentInfo[]; policy_version: string }>(
+      "/api/v1/ops/agents"),
+  opsNotifications: () =>
+    request<{ notifications: OpsNotification[] }>("/api/v1/ops/notifications"),
+  opsReassess: () =>
+    request<{ emitted: number }>("/api/v1/ops/reassess", { method: "POST" }),
+  opsKpis: () => request<OpsKpis>("/api/v1/ops/kpis"),
 };
 
 export interface ApiError {

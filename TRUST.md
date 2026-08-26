@@ -17,6 +17,11 @@ concrete constraint — never abstract "process risk".*
 | Budget engine / cost attribution (Parts A–E) | MEDIUM — financial accuracy for billing | Integer nanocent math reviewed by hand; UI around it is lighter. |
 | Analytics dashboards & exports | LOW-MEDIUM — decision support | Middle of spectrum: wrong numbers mislead but rarely harm. |
 | Demo pack, docs, onboarding copy (Parts 10, 14–16) | LOW | Legitimate vibe-coding territory. |
+| **v3.0** SENTINEL remediation (patch/ticket path) | **HIGH** — infra-changing potential | Agentic engineering MANDATORY. `apply_patch` is policy-gated REQUIRE_HUMAN by AUDITOR; auto-execution is architecturally absent (test-enforced: `request_patch` parks AWAITING_HUMAN). |
+| **v3.0** AUDITOR gating + screening (A-06) | **HIGH** — governance root of trust | Manual line review per release. Every decision persisted to an immutable trail; unknown actions default to REQUIRE_HUMAN (fail-closed). |
+| **v3.0** PATHFINDER RGD + mesh failover (A-02/§3.3) | MEDIUM-HIGH — coordination correctness | Task states and failover resume covered by the suite; decomposition templates are deterministic keyword rules (no LLM-in-the-loop). |
+| **v3.0** Conversational Cortex (§3.1) | MEDIUM — interpretation layer | Clarifies instead of guessing; context TTL 1h (§25); cortex replies always trace to a task tree. |
+| **v3.0** Custom Agent SDK (A-13/§5.2) | **HIGH** — third-party code path | SHADOW admission by default (read-only); external-effect functions rejected at validation; human promotion is a REQUIRE_HUMAN audited action. |
 
 ### Posture statement (audience-ready)
 
@@ -113,6 +118,37 @@ RULE 2 (bottleneck-map): Before accelerating any pipeline stage (more
 
 Rule 1 extends Part 20 model governance to *all* generated artifacts;
 Rule 2 is a checklist item in the §14.5 launch gate.
+
+---
+
+## 5. v3.0 SOVEREIGN FUSION addendum
+
+The v3.0 upgrade (see the master spec) introduces autonomous *orchestration*
+capability; the trust posture tightens accordingly:
+
+1. **Agents advise and prioritize; they do not act on the world.** Every
+   external-effect operation (`apply_patch`, `block_domain`, `isolate_host`,
+   `promote_custom_agent`, evidence purge) passes
+   `AUDITOR.authorize_action` → REQUIRE_HUMAN, and the decision lands on the
+   immutable audit trail with the sovereign policy version. The v3.0 suite
+   asserts patching parks `AWAITING_HUMAN` — there is no code path that skips
+   this (fail-closed default: unknown actions REQUIRE_HUMAN).
+2. **Function-level governance is architectural (A-14).** PATHFINDER dispatch
+   consults each agent's declared `api_functions` allowlist before every task;
+   out-of-allowlist calls become BLOCKED task states (§20-classified), not
+   retries or silent drops.
+3. **The named constraint stands (Rule 2).** v3.0 moves more verdict types
+   through the tiered review matrix, but KYC manual reviewer capacity
+   (§14's 4-business-hour SLA) remains the non-samplable constraint —
+   SENTINEL/AUDITOR tickets join that same queue, monitored via
+   `/api/v1/ops/kpis` `review_queue_depth`.
+4. **Reassessment is honest by construction (§1.10).** The continual
+   reassessment loop only *notifies*; it never edits history. Prior verdicts
+   remain in the checks table; the notification body records the old outcome
+   and the reason for the change.
+5. **Personalization shapes presentation, never conclusions (§3.4).** The
+   only personalized knob shipped (journey watch `tolerance`) gates
+   *notifications*, and response payloads state this explicitly.
 
 ---
 

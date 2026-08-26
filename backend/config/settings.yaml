@@ -1,0 +1,23 @@
+# ThreatHunter360 service-layer switch — spec §Self-Hosted Geo Stack 1.3.
+# "config-driven, zero code change": every service reads these URLs from
+# settings; env vars (GEO_NOMINATIM_URL / GEO_OSRM_URL) always win over file.
+#
+# Blank values (default below) = public endpoints stay active:
+#   Nominatim → https://nominatim.openstreetmap.org  (1 req/s fair use, §1.2)
+#   OSRM      → https://router.project-osrm.org      (no SLA, §4.5)
+geo:
+  nominatim_url:
+  osrm_url:
+
+# ── Self-hosted configuration (spec §1.3 example) ─────────────────────────
+# After `docker compose -f docker-compose.geo.yml up -d` (§Runbook), point the
+# services at the local instances by replacing the `geo:` block above with:
+#
+# geo:
+#   nominatim_url: http://th360-nominatim:8080   # public fallback in comment
+#   osrm_url: http://th360-osrm:5000
+#
+# Self-hosting is recommended before launch when journey traffic exceeds
+# ~500 routes/day (spec §1.1); it also lifts the 1 req/s Nominatim pause —
+# GeoService widens its concurrency automatically when the URL is not the
+# public host (§1.3, zero code change).

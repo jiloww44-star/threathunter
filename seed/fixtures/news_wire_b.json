@@ -1,0 +1,29 @@
+{
+  "designed_to_test": "copy_chain_detection (§1.6 — same independence_group as wire_a)",
+  "published_at": "2026-08-15T11:30:00Z",
+  "articles": [
+    {
+      "id": "art-002",
+      "headline": "Company X sanctioned after regulatory review",
+      "body": "Company X was sanctioned on 14 August 2026 following a regulatory review. The listing appeared in regulatory documents seen by accredited press, the wire account reported.",
+      "entities": ["Company X"],
+      "entity": "Company X",
+      "event_type": "sanction",
+      "event_date": "2026-08-14",
+      "location": "Lagos",
+      "supports_claim": true,
+      "designed_to_test": "copy_chain_detection"
+    },
+    {
+      "id": "art-005",
+      "headline": "Flood warnings issued for Lagos districts after heavy rain",
+      "body": "A flood warning was issued for low-lying districts of Lagos after heavy overnight rainfall overwhelmed drainage channels.",
+      "entities": ["Lagos"],
+      "entity": "Lagos",
+      "event_type": "natural disaster",
+      "event_date": "2026-08-18",
+      "location": "Lagos",
+      "supports_claim": null
+    }
+  ]
+}

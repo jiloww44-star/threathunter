@@ -1,0 +1,198 @@
+# ThreatHunter360 — Inductive Intelligence Platform
+
+An implementation of the **ThreatHunter360 — Automated Data Scraping & Content
+Extraction Architecture** spec (in this repo). The document is the single
+source of truth; every module here traces back to it by section (§) and Part
+reference.
+
+```
+┌ FACT CHECKER ─┬─ JOURNEY ADVISOR ─┬─ KYC VERIFICATION ─┬─ RECENT CHECKS ┐
+│                    INDUCTIVE-LOGICAL REASONING ENGINE                    │
+│        Observation → Signals → Patterns → Hypotheses → Confidence        │
+│              EVIDENCE CORRELATION & STORE (provenance first)             │
+│     SCRAPING PIPELINE: Schedule → Fetch → Extract → Normalize →          │
+│                        Signalize → Weight → Store                        │
+│         DATA SOURCES · reliability · authority · independence_group      │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+## Quickstart (runs today, zero external dependencies — spec Part 10)
+
+```bash
+# 1. Backend (auto-ingests the demo seed pack on first boot)
+pip install -r backend/requirements.txt
+cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 2. Frontend (second terminal)
+cd frontend && npm install && npm run dev
+
+# 3. Tests (spec Part 8 — 60 tests, engine suite is trust-critical)
+cd backend && python -m pytest tests
+```
+
+- Dashboard: **http://localhost:5173**
+- API docs: **http://localhost:8000/docs**
+- One-command wrapper: `scripts/run_demo.sh`
+- Full production topology (FastAPI + Celery + pgvector Postgres + Redis):
+  `docker compose up --build`
+
+## The five scripted demo scenarios — [`seed/demo_scenarios.md`](seed/demo_scenarios.md)
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| 1 | “Company X was sanctioned in August 2026” | `MOSTLY_TRUE` · `HIGH` · copy-chain collapsed (independent < total) · contradiction flagged |
+| 2 | “A celebrity secretly married in Lagos last week” | `UNVERIFIED` · `UNDETERMINED` — never fabricated |
+| 3 | Lagos→Ibadan at 21:00 vs 07:00 | HIGH risk at km 42 at night, LOW/MODERATE by day, per-segment *why* |
+| 4 | KYC fixture with date inconsistency | `VERIFIED_WITH_ADDITIONAL_REVIEW` — anomaly ≠ fraud, routed to §27 queue |
+| 5 | `python seed/seed_script.py --confirm`, then reassess check #1 | upgrades to `VERIFIED` · `VERY_HIGH` — §1.10 continuous reassessment |
+
+## Architecture map (spec → code)
+
+| Spec part | Implementation |
+|---|---|
+| Part 1 — FastAPI backend | `backend/app/` (routes, core, scraper, store, models) |
+| Part 1.3 / §19 — response contract | `backend/app/models/schemas.py` → `IntelligenceResponse` |
+| Part 1.5 — Inductive engine | `backend/app/core/reasoning_engine.py` (observation → discovery → independence → contradictions → H1–H4 → confidence → verdict), `confidence.py`, `contradictions.py`, `trust_model.py` |
+| Parts 2·3 — scraping pipeline | `backend/app/scraper/` (fetcher·extractor·dedupe·orchestrator), registry `seed/sources_demo.yaml` |
+| Part 4 — storage schema | `backend/app/store/db.py` (SQLite demo adapter over the spec's Postgres/pgvector contract; production via docker-compose) |
+| Part 5/§5 — modules | routes `factcheck.py` · `journey.py` · `kyc.py`; core `journey.py` (risk fusion, predictions §9 hedged) · `kyc.py` (consistency §12, decision §13, MockBiometricProvider) |
+| Part 8 — testing | `backend/tests/` — copy-chain=1 source, contradiction blocks VERY_HIGH, UNVERIFIED≠FALSE, anomaly≠denial, hedged-language fuzz |
+| Part 10 — seed pack | `seed/` — fixtures deliberately designed to exercise corroboration, copy-chains, entity confusion (H3), night-vs-day risk |
+| Part 11 — voice | `backend/app/api/routes/voice.py` (spoken summaries) + `frontend/src/hooks/useVoice.ts` (Web Speech adapter, graceful degradation §20) |
+| Part 12 — evidence graph | `GET /api/v1/graph/case/{id}` → `EvidenceGraph.tsx` (COPIED_FROM edges visualized in red) |
+| Part 13 — multi-tenant | `api/deps.py` tenant resolution; demo enterprise key `sk_demo_threathunter360` |
+| Part 2 — React dashboard | `frontend/src/` — home, ClaimInput (280-char counter), LoadingStages, progressive-disclosure result, RiskTimeline, KYCFlow, dark design tokens, `prefers-reduced-motion` respected |
+
+## Repo layout
+
+```
+backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
+  app/api/routes/  factcheck · journey · kyc · feed · graph · voice
+  app/core/        reasoning_engine · confidence · contradictions · journey · kyc
+  app/scraper/     fetcher · extractor (JSON-LD first) · dedupe (simhash) · orchestrator
+  app/store/       evidence/signals/hypotheses/checks/review_queue repository
+  tests/           27 tests (engine / journey / kyc / API integration)
+frontend/          React + Vite dashboard (progressive disclosure, accessible)
+seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)
+scripts/           run_demo.sh
+docker-compose.yml Production topology (api/worker/beat/db/redis)
+```
+
+## Free-Tier Stack Integration (spec §1–§4)
+
+| Integration | Where | Behavior |
+|---|---|---|
+| **OpenStreetMap** — Nominatim geocoding, OSRM routing, Leaflet map | `backend/app/services/geo.py`·`routing.py`, fused in `core/journey.py` (`build_risk_timeline_live`), rendered in `frontend/src/components/JourneyMap.tsx` | Keyless, fair-use limited (1 req/s, cache + semaphore). Unavailable → fixture corridor with visible `data_mode: "offline-fixture"` (§20), map still renders seeded segments |
+| **Firecrawl** — evidence sourcing | `backend/app/scrapers/firecrawl_adapter.py`, `method: firecrawl[_search]` in the source registry (see `seed/sources_demo.yaml` commented examples) | Every call budget-guarded as `firecrawl:<source_id>` (§2.4); exhaustion → SOURCE_DEGRADED. `search` mode assigns dynamic per-domain independence groups (§2.2) |
+| **OpenRouter** — AI actions | `backend/app/llm/` (`openrouter.py`, `circuit_breaker.py` + `config/model_ladder.yaml`, `config/budget.yaml`) | All narratives flow through the budget-gated gateway: `select_model` walks the ladder FULL → STANDARD → MINIMAL(`:free`) → OFF; native fallback chains; actual usage cost settles as nanocents; KYC never degrades to free models. No key → deterministic templates (demo profile) |
+| **Budget engine (Part E)** | `backend/app/core/budget.py` + `budget_tx` table | Nanocent accounting governs both OpenRouter tokens AND Firecrawl credits; failed calls settle at $0; attempts always logged; feeds analytics |
+| **Analytics sheet & dashboard** | `backend/app/api/routes/admin.py` (`/admin/analytics/summary`, `/admin/analytics/export?format=csv|xlsx`, `/admin/budget`), `frontend/src/views/Analytics.tsx` | §4.1 `analytics_daily` view (checks, verdict mix, confidence, source-independence ratio, spend/day) → KPI cards, stacked verdict area, cost/volume scatter, independence-ratio line with 0.6 target; data-sheet export CSV (XLSX when `openpyxl` installed) |
+
+### Cost posture of this demo
+
+With no `FIRECRAWL_API_KEY`/`OPENROUTER_API_KEY` set the platform runs **$0.00**:
+OSM/Leaflet are keyless, all AI narrative slots degrade to deterministic
+templates with visible markers, and the budget ledger (`/api/v1/admin/budget`)
+shows attempts at zero realized spend. Point the two keys at your providers
+and the same paths come alive under the cap rules in `backend/config/budget.yaml`.
+
+## Self-Hosted Geo Stack (spec §Self-Hosted Part 1) + E2E Demo (Part 2)
+
+Public Nominatim/OSRM have fair-use limits and no SLA. The self-host path is
+defined in **`docker-compose.geo.yml`** (Nominatim 4.4 + OSRM + optional
+tileserver, with healthchecks and a one-shot `osrm-prep` data job):
+
+```bash
+# 1. Geo stack (one-time import, ~30–90 min depending on extract size)
+docker compose -f docker-compose.geo.yml --profile prep run osrm-prep
+docker compose -f docker-compose.geo.yml up -d nominatim osrm
+
+# 2. Point the services at the local instances — zero code change (§1.3).
+#    backend/config/settings.yaml `geo:` keys or env (env wins):
+export GEO_NOMINATIM_URL=http://localhost:8080
+export GEO_OSRM_URL=http://localhost:5000
+#    → GeoService detects self-hosting and lifts the 1 req/s pause
+#      (semaphore 1 → 20); UA header stays per OSM courtesy.
+
+# 3. Free-tier keys (optional; everything degrades honestly without them)
+export FIRECRAWL_API_KEY=fc-...
+export OPENROUTER_API_KEY=sk-or-...
+
+# 4. Verify end-to-end
+python demo/e2e_free_stack_demo.py --offline
+```
+
+Definition of the switch: **public now** (fine until journey traffic >
+~500 routes/day), **self-hosted before launch** — same classes, different URL.
+
+### End-to-end free-stack demo — `demo/e2e_free_stack_demo.py`
+
+One scenario wiring all four integrations through a single case:
+
+`"The Governor announced construction of a new international airport in Lagos"`
+
+| Stage | Service | Contribution visible in output |
+|---|---|---|
+| 1 | **Firecrawl** | Raw docs sourced per the §2.2 registry (`firecrawl_search`, dynamic domain groups); no key → source marked **stale with real age** and the pack's cached evidence stands (§2.4/§20) |
+| 2 | **OpenRouter + inductive engine** | `MISLEADING / HIGH` — the single government release and 13 syndicated amplifications collapse into **2 independent of 14**; copy-chain analysis reports **2 text clusters, 13 articles tracing to one origin** (§1.6); 13 release-vs-announcement date conflicts (MODERATE) drive H4 |
+| 3 | **Nominatim → OSRM → Leaflet** | Ikeja → Victoria Island at 18:30; live road geometry + true arrival clocks, or the honest `offline-fixture` corridor — hotspot: **Third Mainland Bridge approach @ 18:50** (hedged, §9) |
+| 4 | **Budget engine** | Every metered attempt reserved→settled and attributed via `app.budget.context.current_case_id` (§2.1); `budget_tx_for_case` shows the full audit trail — $0.0000 realized in demo profile, non-zero with keys |
+| 5 | **Analytics sheet** | The run lands in `demo_analytics.csv` (§4.2 Daily sheet) within seconds |
+
+Reproduce the expected §2.2-style output offline (deterministic, no network):
+
+```bash
+python demo/e2e_free_stack_demo.py --offline \
+    --db /tmp/e2e.db --out demo_analytics.csv
+#   Verdict: MISLEADING · Confidence: HIGH · Sources: 2 independent of 14
+#   Copy-chains detected: 2 clusters (largest chain = 13 articles …)
+```
+
+Failure-mode demonstrations (§2.4 — each dependency can fail without
+corrupting conclusions):
+
+```bash
+python demo/e2e_free_stack_demo.py --offline --inject-fault osrm-down
+#   → "Routing service unavailable — journey risk cannot be assessed
+#      reliably." (UNDETERMINED; no timeline fabricated)
+python demo/e2e_free_stack_demo.py --offline --inject-fault firecrawl-exhausted
+#   → sources marked DEGRADED with staleness banner; the check still runs
+#     on cached evidence
+```
+
+## Trust posture — [`TRUST.md`](TRUST.md)
+
+Shipping discipline for agent-generated intelligence software: every
+component is classified by **blast radius** (KYC/verdict logic = line-reviewed;
+dashboard styling/docs = sampled), review lanes are **uncertainty-tiered**
+(Part 18 D1: contradictions ≥2, copy-chain dominance, or confidence ≤
+MODERATE always reach humans; high-confidence low-stakes auto-publish with a
+5% audit sample), and source trust is **auto-scored** per ingest (§U1 health
+scorecard — stale or echoing sources demote themselves and ping a curator).
+The named next constraint is KYC reviewer capacity (4-hour SLA). A 4-week
+production pilot with override tracking is the only accepted long-term
+quality signal — test suites are necessary, not sufficient.
+
+Admin visibility: `/api/v1/admin/review-queue` (tier lanes),
+`/api/v1/admin/source-health` (+ `/refresh` to recompute).
+
+## North star (spec §26)
+
+> Facts separated from inference. Uncertainty stated honestly
+> (UNVERIFIED ≠ FALSE). Provenance everywhere. Humans escalated when needed
+> — the system admits what it doesn't know.
+
+## Production hardening path
+
+The demo profile intentionally swaps heavy infrastructure behind the spec's
+repository/provider interfaces. `docker-compose.yml` restores the real stack:
+
+- **Postgres + pgvector** for `VECTOR(1536)` semantic signal search (Part 4)
+- **Neo4j** for the interactive evidence graph (Part 12)
+- **Celery + Redis** for cron scraping beat (`scrape all every 15 min`,
+  nightly retention maintenance, Part 4.2)
+- **spaCy/sentence-transformers/Whisper** models behind `nlp_lite`'s
+  interfaces (Part 3.1); **biometric providers** behind
+  `MockBiometricProvider` (Part 5.2)
+- TLS 1.3, WAF rate limits, Vault/KMS secrets, RBAC, audit log, GDPR erasure
+  endpoints, alert rules (Parts 9, 14)

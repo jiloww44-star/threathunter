@@ -1,0 +1,676 @@
+"""Evidence correlation & store — spec Part 4 + §1 (graph store layer).
+
+Production profile: PostgreSQL + pgvector (Part 4 schema) and Neo4j for the
+evidence graph (Part 12.1). Demo profile: SQLite implementing the *same
+repository contract* — same tables, same semantics, vector search via stored
+embeddings + cosine (the pgvector HNSW query is the production equivalent).
+
+Every row keeps provenance per §16-17: source, timestamps, reliability,
+authority, independence group.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+import threading
+import uuid
+from datetime import datetime, timezone
+
+from ..config import settings
+from ..core import nlp_lite
+from ..scraper.models import RawEvidence, Reliability, Signal
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS evidence (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    url TEXT,
+    fetched_at TEXT,
+    published_at TEXT,
+    reliability TEXT,
+    reliability_score REAL,
+    authority TEXT,              -- PRIMARY | SECONDARY
+    independence_group TEXT,
+    content_hash TEXT,
+    title TEXT,
+    excerpt TEXT,
+    raw_ref TEXT,                -- pointer to encrypted blob store (§25)
+    metadata_json TEXT DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_source ON evidence(source_id);
+
+CREATE TABLE IF NOT EXISTS signals (
+    id TEXT PRIMARY KEY,
+    evidence_id TEXT REFERENCES evidence(id),
+    entity TEXT,
+    event_type TEXT,
+    location TEXT,
+    event_time TEXT,
+    claim_text TEXT,
+    claim_embedding TEXT,        -- JSON vector; pgvector VECTOR(n) in prod
+    supports_claim INTEGER,      -- 1/0/NULL
+    reliability_score REAL,
+    extracted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_signals_entity ON signals(entity);
+
+CREATE TABLE IF NOT EXISTS hypotheses (
+    id TEXT PRIMARY KEY,
+    case_id TEXT,
+    statement TEXT,
+    supporting INTEGER DEFAULT 0,
+    contradicting INTEGER DEFAULT 0,
+    score REAL DEFAULT 0,
+    confidence TEXT,
+    status TEXT DEFAULT 'ACTIVE',   -- ACTIVE | SUPERSEDED (§1.10)
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS checks (
+    id TEXT PRIMARY KEY,
+    module TEXT,                    -- factcheck | journey | kyc
+    subject TEXT,
+    outcome TEXT,
+    confidence TEXT,
+    response_json TEXT,
+    model_versions TEXT,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sources_meta (
+    source_id TEXT PRIMARY KEY,
+    reliability TEXT,
+    authority TEXT,
+    independence_group TEXT,
+    last_success_at TEXT,
+    last_error TEXT,
+    freshness_lag_min REAL DEFAULT 0,
+    health_score REAL,                        -- §Willison U1 auto scorecard
+    health_note TEXT,
+    health_checked_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS review_queue (   -- §27 human-in-the-loop queue
+    id TEXT PRIMARY KEY,
+    module TEXT,
+    case_ref TEXT,
+    reason TEXT,
+    risk TEXT,
+    priority INTEGER DEFAULT 0,
+    tier TEXT,                              -- Part 18 D1 routing lane
+    status TEXT DEFAULT 'OPEN',
+    created_at TEXT,
+    sla_deadline TEXT
+);
+
+CREATE TABLE IF NOT EXISTS budget_tx (      -- LLM/Firecrawl spend ledger
+    id TEXT PRIMARY KEY,
+    purpose TEXT,
+    model_id TEXT,
+    est_nano INTEGER DEFAULT 0,
+    actual_nano INTEGER,
+    mode TEXT,
+    case_id TEXT,                             -- §2.1 case-attributed audit
+    created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_budget_tx_purpose ON budget_tx(purpose, created_at);
+"""
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class EvidenceStore:
+    """Thread-safe SQLite repository (async-compatible via short ops)."""
+
+    def __init__(self, path: str | None = None):
+        self.path = path or settings.DATABASE_PATH
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        with self._lock:
+            self._conn.executescript(_SCHEMA)
+            self._migrate()
+            self._conn.commit()
+
+    def _migrate(self):
+        """Additive migrations (idempotent) for live demo databases."""
+        cols = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(budget_tx)")}
+        if "case_id" not in cols:
+            # §2.1 — case-attributed spend audit (e2e demo Stage 4)
+            self._conn.execute(
+                "ALTER TABLE budget_tx ADD COLUMN case_id TEXT")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_budget_tx_case "
+                "ON budget_tx(case_id)")
+        rq = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(review_queue)")}
+        if "tier" not in rq:
+            # Part 18 D1 — tiered review routing (TRUST.md §Tiered review)
+            self._conn.execute(
+                "ALTER TABLE review_queue ADD COLUMN tier TEXT")
+        sm = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(sources_meta)")}
+        if "health_score" not in sm:
+            # §Willison U1 — automated source health scoring
+            self._conn.execute(
+                "ALTER TABLE sources_meta ADD COLUMN health_score REAL")
+            self._conn.execute(
+                "ALTER TABLE sources_meta ADD COLUMN health_note TEXT")
+            self._conn.execute(
+                "ALTER TABLE sources_meta ADD COLUMN health_checked_at TEXT")
+
+    def close(self):
+        global _store
+        with self._lock:
+            self._conn.close()
+        if _store is self:
+            _store = None
+
+    # ------------------------------------------------------------ writes --
+    def upsert_source_meta(self, src: dict, ok: bool, error: str | None = None,
+                           at: str | None = None):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO sources_meta(source_id, reliability, authority,
+                            independence_group, last_success_at, last_error)
+                   VALUES (?,?,?,?,?,?)
+                   ON CONFLICT(source_id) DO UPDATE SET
+                     reliability=excluded.reliability,
+                     authority=excluded.authority,
+                     independence_group=excluded.independence_group,
+                     last_success_at=COALESCE(excluded.last_success_at,
+                                              sources_meta.last_success_at),
+                     last_error=excluded.last_error""",
+                (
+                    src["id"], src.get("reliability", "UNKNOWN"),
+                    src.get("authority", "SECONDARY"),
+                    src.get("independence_group", src["id"]),
+                    (at or _now()) if ok else None, error,
+                ),
+            )
+            self._conn.commit()
+
+    def source_meta(self, source_id: str) -> dict | None:
+        """Last-known-good fetch state for one source — drives §2.4/§20
+        staleness banners ('last successful fetch Xh ago')."""
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM sources_meta WHERE source_id=?",
+                (source_id,)).fetchone()
+        return dict(r) if r else None
+
+    def all_source_meta(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM sources_meta").fetchall()
+        return [dict(r) for r in rows]
+
+    def update_source_health(self, source_id: str, health: float,
+                             note: str, authority: str | None = None):
+        """§Willison U1 — persist the auto scorecard (and any auto authority
+        change); the note is the audit trail, always human-readable."""
+        with self._lock:
+            if authority is not None:
+                self._conn.execute(
+                    """UPDATE sources_meta SET health_score=?, health_note=?,
+                           health_checked_at=?, authority=?
+                       WHERE source_id=?""",
+                    (health, note, _now(), authority, source_id))
+            else:
+                self._conn.execute(
+                    """UPDATE sources_meta SET health_score=?, health_note=?,
+                           health_checked_at=? WHERE source_id=?""",
+                    (health, note, _now(), source_id))
+            self._conn.commit()
+
+    def existing_content_hashes(self) -> set[str]:
+        with self._lock:
+            rows = self._conn.execute("SELECT content_hash FROM evidence").fetchall()
+        return {r[0] for r in rows if r[0]}
+
+    def insert_evidence(self, raw: RawEvidence, signals: list[Signal]) -> int:
+        """Store fetched content + its signals. Idempotent by content hash.
+
+        Two granularities:
+          * ARTICLE mode — structured payloads (spec Part 10): every article/
+            entry/feature becomes ONE evidence row + ONE signal (provenance
+            per item, §16-17).
+          * PAGE mode — a single fetched page/document → one row.
+        """
+        if signals and all(s.evidence_id for s in signals):
+            return self._insert_articles(raw, signals)
+
+        with self._lock:
+            exists = self._conn.execute(
+                "SELECT id FROM evidence WHERE content_hash=? AND source_id=?",
+                (raw.content_hash, raw.source_id),
+            ).fetchone()
+            if exists:
+                return 0
+            ev_id = str(uuid.uuid4())
+            title = raw.raw_text[:80].split("\n")[0]
+            self._conn.execute(
+                """INSERT INTO evidence(id, source_id, url, fetched_at,
+                    published_at, reliability, reliability_score, authority,
+                    independence_group, content_hash, title, excerpt,
+                    raw_ref, metadata_json)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    ev_id, raw.source_id, raw.url, raw.fetched_at,
+                    raw.metadata.get("published_at"),
+                    raw.metadata.get("reliability", "UNKNOWN"),
+                    Reliability.__members__.get(
+                        raw.metadata.get("reliability", "UNKNOWN"),
+                        Reliability.UNKNOWN).value,
+                    raw.metadata.get("authority", "SECONDARY"),
+                    raw.metadata.get("independence_group", raw.source_id),
+                    raw.content_hash, title, raw.raw_text[:300],
+                    f"vault://enc/{raw.content_hash[:16]}",
+                    json.dumps(raw.metadata),
+                ),
+            )
+            inserted = 0
+            for sig in signals:
+                self._insert_signal_row(ev_id, sig)
+                inserted += 1
+            self._conn.commit()
+        return inserted
+
+    def _insert_articles(self, raw: RawEvidence, signals: list[Signal]) -> int:
+        inserted = 0
+        with self._lock:
+            for sig in signals:
+                # deterministic idempotency: source + article id
+                chash = hashlib.sha256(
+                    f"{raw.source_id}|{sig.evidence_id}".encode()
+                ).hexdigest()
+                exists = self._conn.execute(
+                    "SELECT id FROM evidence WHERE content_hash=?",
+                    (chash,)).fetchone()
+                if exists:
+                    continue
+                ev_id = str(uuid.uuid4())
+                meta = dict(sig.metadata or {})
+                title = (meta.get("headline") or sig.claim_text[:80]).strip()
+                self._conn.execute(
+                    """INSERT INTO evidence(id, source_id, url, fetched_at,
+                        published_at, reliability, reliability_score, authority,
+                        independence_group, content_hash, title, excerpt,
+                        raw_ref, metadata_json)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        ev_id, raw.source_id, meta.get("url") or raw.url,
+                        raw.fetched_at,
+                        meta.get("published_at") or sig.time,
+                        raw.metadata.get("reliability", "UNKNOWN"),
+                        sig.confidence_input,
+                        raw.metadata.get("authority", "SECONDARY"),
+                        raw.metadata.get("independence_group", raw.source_id),
+                        chash, title, sig.claim_text[:400],
+                        f"vault://enc/{chash[:16]}",
+                        json.dumps({**raw.metadata, "article_id": sig.evidence_id,
+                                    "designed_to_test": sig.designed_to_test,
+                                    "severity": meta.get("severity"),
+                                    "segment": meta.get("segment"),
+                                    "time_of_day": meta.get("time_of_day")}),
+                    ),
+                )
+                self._insert_signal_row(ev_id, sig)
+                inserted += 1
+            self._conn.commit()
+        return inserted
+
+    def _insert_signal_row(self, ev_id: str, sig: Signal):
+        emb = nlp_lite.embed(sig.claim_text)
+        self._conn.execute(
+            """INSERT INTO signals(id, evidence_id, entity, event_type,
+                location, event_time, claim_text, claim_embedding,
+                supports_claim, reliability_score, extracted_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                str(uuid.uuid4()), ev_id, sig.entity, sig.event_type,
+                sig.location, sig.time, sig.claim_text,
+                json.dumps(emb),
+                None if sig.supports_claim is None
+                else int(bool(sig.supports_claim)),
+                sig.confidence_input, _now(),
+            ),
+        )
+
+    def insert_hypothesis(self, case_id: str, statement: str, supporting: int,
+                          contradicting: int, score: float, confidence: str,
+                          status: str = "ACTIVE"):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO hypotheses(id, case_id, statement, supporting,
+                    contradicting, score, confidence, status, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (str(uuid.uuid4()), case_id, statement, supporting,
+                 contradicting, score, confidence, status, _now()),
+            )
+            self._conn.commit()
+
+    def record_check(self, module: str, subject: str, outcome: str,
+                     confidence: str, response: dict, check_id: str | None = None) -> str:
+        cid = check_id or str(uuid.uuid4())
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO checks(id, module, subject, outcome, confidence,
+                    response_json, model_versions, created_at)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (cid, module, subject, outcome, confidence,
+                 json.dumps(response), json.dumps(settings.MODEL_VERSIONS), _now()),
+            )
+            self._conn.commit()
+        return cid
+
+    def enqueue_review(self, module: str, case_ref: str, reason: str,
+                       risk: str = "MODERATE", priority: int = 25,
+                       tier: str | None = None) -> str:
+        rid = str(uuid.uuid4())
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO review_queue(id, module, case_ref, reason, risk,
+                    priority, tier, created_at, sla_deadline)
+                   VALUES (?,?,?,?,?,?,?,?, datetime('now', '+4 hours'))""",
+                (rid, module, case_ref, reason, risk, priority, tier, _now()),
+            )
+            self._conn.commit()
+        return rid
+
+    # ------------------------------------------------------------- reads --
+    def all_evidence(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM evidence").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_evidence(self, evidence_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM evidence WHERE id=?", (evidence_id,)).fetchone()
+        return dict(r) if r else None
+
+    def all_signals(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT s.*, e.source_id, e.independence_group, e.reliability,
+                          e.authority, e.url, e.fetched_at, e.published_at,
+                          e.excerpt
+                   FROM signals s JOIN evidence e ON e.id = s.evidence_id"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def search_signals(self, claim: str, limit: int = 50,
+                       elements: dict | None = None) -> list[dict]:
+        """Semantic source discovery over the evidence store (pgvector cosine
+        in prod; here: cosine over stored embeddings + entity/date boosts).
+
+        Retrieval stays entity-anchored for §1.9 honesty: claim-side office
+        titles resolve to their institutions via same_entity title aliasing
+        ("the Governor" co-refers to "... Government"), so claims like the
+        airport announcement match records filed under the government entity
+        without opening the pool to every document mentioning a city."""
+        rows = self.all_signals()
+        if not rows:
+            return []
+        vec = nlp_lite.embed(claim)
+        elements = elements or nlp_lite.extract_claim_elements(claim)
+        ents = [e.lower() for e in elements.get("entities", [])
+                + elements.get("orgs", [])]
+        return self._score(rows, vec, ents, elements, limit)
+
+    def _score(self, rows: list[dict], vec, ents: list[str],
+               elements: dict, limit: int,
+               tag: str | None = None) -> list[dict]:
+        ev_type = elements.get("event_type")
+        dates = elements.get("dates", [])
+
+        scored = []
+        for r in rows:
+            stored = json.loads(r["claim_embedding"]) if r.get("claim_embedding") else None
+            base = nlp_lite.cosine(vec, stored) if stored else 0.0
+            score = base
+            entity_hit = any(
+                r.get("entity") and (e in r["entity"].lower() or r["entity"].lower() in e)
+                for e in ents
+            ) or any(nlp_lite.same_entity(e, r.get("entity"),
+                                          allow_title_alias=True)
+                     for e in ents)
+            if entity_hit:
+                score += 0.35
+            if ev_type and r.get("event_type") and ev_type == r["event_type"]:
+                score += 0.20
+            if dates and r.get("event_time"):
+                ev_month = str(r["event_time"])[:7]
+                if any(str(d)[:7] == ev_month for d in dates):
+                    score += 0.10
+            entity_applicable = (not ents) or entity_hit
+            scored.append((score, entity_hit, entity_applicable, r))
+
+        scored.sort(key=lambda t: t[0], reverse=True)
+        # Entity claims: require entity match OR very high semantic similarity.
+        out = []
+        for score, entity_hit, applicable, r in scored[:limit]:
+            if not applicable and score < 0.62:
+                continue
+            if score < 0.12:
+                continue
+            r = dict(r)
+            r["relevance"] = score
+            r["entity_matched"] = entity_hit
+            if tag:
+                r["retrieval"] = tag
+            out.append(r)
+        return out
+
+    def recent_checks(self, limit: int = 10) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM checks ORDER BY created_at DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_check(self, check_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM checks WHERE id=?", (check_id,)).fetchone()
+        return dict(r) if r else None
+
+    def get_hypotheses(self, case_id: str) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM hypotheses WHERE case_id=? ORDER BY score DESC",
+                (case_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def review_queue(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM review_queue WHERE status='OPEN' "
+                "ORDER BY priority DESC, created_at ASC").fetchall()
+        return [dict(r) for r in rows]
+
+    def statistics(self) -> dict:
+        with self._lock:
+            c = self._conn.cursor()
+            total = c.execute("SELECT COUNT(*) FROM checks").fetchone()[0]
+            verdict_rows = c.execute(
+                "SELECT outcome, COUNT(*) FROM checks GROUP BY outcome").fetchall()
+            conf_map = {"VERY_HIGH": .95, "HIGH": .8, "MODERATE": .6, "LOW": .4,
+                        "VERY_LOW": .2, "UNDETERMINED": .1}
+            confs = [r[0] for r in c.execute(
+                "SELECT DISTINCT confidence FROM checks").fetchall()]
+            avg_conf = (sum(conf_map.get(k, .1) for k in confs) / len(confs)
+                        if confs else 0.0)
+            ev_total = c.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
+            sig_total = c.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
+            src_total = c.execute("SELECT COUNT(*) FROM sources_meta").fetchone()[0]
+            q_depth = c.execute(
+                "SELECT COUNT(*) FROM review_queue WHERE status='OPEN'").fetchone()[0]
+        # Part 4.4 — copy-chain ratio: near-identical items inside the same
+        # independence group ÷ total items (rising = echo/disinfo pattern)
+        from ..scraper.dedupe import hamming, simhash64
+        evidence = self.all_evidence()
+        by_group: dict[str, list[dict]] = {}
+        for ev in evidence:
+            by_group.setdefault(ev["independence_group"], []).append(ev)
+        total_refs = len(evidence)
+        dup_refs = 0
+        for g in by_group.values():
+            if len(g) < 2:
+                continue
+            hashes = [simhash64(e.get("excerpt") or "") for e in g]
+            seen: list[int] = []
+            for h in hashes:
+                if any(hamming(h, s) <= 12 for s in seen):
+                    dup_refs += 1
+                else:
+                    seen.append(h)
+        copy_ratio = (dup_refs / total_refs) if total_refs else 0.0
+        return {
+            "total_checks": total,
+            "verdict_mix": {k: n for k, n in verdict_rows},
+            "avg_confidence_score": round(avg_conf, 3),
+            "sources_active": src_total,
+            "evidence_items": ev_total,
+            "signals_indexed": sig_total,
+            "copy_chain_ratio": round(copy_ratio, 3),
+            "review_queue_depth": q_depth,
+            "model_versions": settings.MODEL_VERSIONS,
+        }
+
+    # ----------------------------------------------------- budget ledger --
+    def insert_budget_tx(self, tx: dict):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO budget_tx(id, purpose, model_id, est_nano,
+                    actual_nano, mode, case_id, created_at)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (tx["id"], tx.get("purpose"), tx.get("model_id"),
+                 tx.get("est_nano", 0), tx.get("actual_nano"),
+                 tx.get("mode", "STANDARD"), tx.get("case_id"),
+                 tx.get("created_at") or _now()),
+            )
+            self._conn.commit()
+
+    def budget_tx_rows(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM budget_tx").fetchall()
+        return [dict(r) for r in rows]
+
+    def budget_tx_for_case(self, case_id: str) -> list[dict]:
+        """§2.1 Stage 4 — full spend trail attributed to one case, in
+        reserve order, with usd computed like the ledger (actual wins;
+        unsettled rows count at their estimate)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM budget_tx WHERE case_id=? "
+                "ORDER BY created_at, rowid", (case_id,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            nano = d["actual_nano"] if d.get("actual_nano") is not None \
+                else (d.get("est_nano") or 0)
+            d["usd"] = round((nano or 0) / 1e9, 6)
+            out.append(d)
+        return out
+
+    # ---------------------------------------------------------- analytics --
+    def analytics_daily(self, days: int = 30) -> list[dict]:
+        """§4.1 analytics_daily view — one row per day: volume, verdict mix,
+        confidence, source independence and spend (SQLite equivalent of the
+        Postgres view in the spec)."""
+        conf_map = {"VERY_HIGH": .95, "HIGH": .8, "MODERATE": .6, "LOW": .4,
+                    "VERY_LOW": .2, "UNDETERMINED": .1}
+        with self._lock:
+            checks = self._conn.execute(
+                """SELECT * FROM checks
+                   WHERE created_at >= date('now', ? || ' days')
+                   ORDER BY created_at""", (f"-{days}",)).fetchall()
+            spend = self._conn.execute(
+                """SELECT * FROM budget_tx
+                   WHERE created_at >= date('now', ? || ' days')""",
+                (f"-{days}",)).fetchall()
+        by_day: dict[str, dict] = {}
+        for c in checks:
+            day = str(c["created_at"])[:10]
+            entry = by_day.setdefault(day, {
+                "day": day, "checks_total": 0, "verified": 0, "unverified": 0,
+                "false_or_misleading": 0, "kyc_cases": 0, "journeys": 0,
+                "conf_sum": 0.0, "diversity_sum": 0.0, "diversity_n": 0,
+            })
+            entry["checks_total"] += 1
+            oc = c["outcome"]
+            if oc == "VERIFIED":
+                entry["verified"] += 1
+            elif oc == "UNVERIFIED":
+                entry["unverified"] += 1
+            elif oc in ("FALSE", "MISLEADING"):
+                entry["false_or_misleading"] += 1
+            if c["module"] == "kyc":
+                entry["kyc_cases"] += 1
+            if c["module"] == "journey":
+                entry["journeys"] += 1
+            entry["conf_sum"] += conf_map.get(c["confidence"], 0.1)
+            if c["module"] == "factcheck":
+                try:
+                    resp = json.loads(c["response_json"])
+                    tot = resp.get("sources_total") or 0
+                    ind = resp.get("sources_independent") or 0
+                    if tot:
+                        entry["diversity_sum"] += ind / tot
+                        entry["diversity_n"] += 1
+                except Exception:
+                    pass
+        spend_by_day: dict[str, float] = {}
+        calls_by_day: dict[str, int] = {}
+        for tx in spend:
+            day = str(tx["created_at"])[:10]
+            amt = int(tx["actual_nano"] if tx["actual_nano"] is not None
+                      else tx["est_nano"] or 0) / 1e9
+            spend_by_day[day] = spend_by_day.get(day, 0.0) + amt
+            calls_by_day[day] = calls_by_day.get(day, 0) + 1
+        out = []
+        for day, entry in sorted(by_day.items()):
+            entry["avg_confidence"] = round(
+                entry.pop("conf_sum") / max(entry["checks_total"], 1), 3)
+            dsum, dn = entry.pop("diversity_sum"), entry.pop("diversity_n") or 1
+            entry["avg_source_diversity"] = round(dsum / dn, 3)
+            entry["llm_cost_usd"] = round(spend_by_day.get(day, 0.0), 6)
+            entry["llm_calls"] = calls_by_day.get(day, 0)
+            entry["outlier"] = bool(
+                entry["llm_cost_usd"] > 0.5 and entry["checks_total"] <= 2)
+            out.append(entry)
+        return out
+
+    # ------------------------------------------------------- maintenance --
+    def expire_raw_content(self, retention_days: int):
+        """§25 retention: null out excerpts older than retention window."""
+        with self._lock:
+            self._conn.execute(
+                """UPDATE evidence SET excerpt = NULL, raw_ref = 'purged'
+                   WHERE fetched_at < datetime('now', ? || ' days')""",
+                (f"-{retention_days}",),
+            )
+            self._conn.commit()
+
+
+_store: EvidenceStore | None = None
+
+
+def get_store() -> EvidenceStore:
+    global _store
+    if _store is None:
+        _store = EvidenceStore()
+    return _store
+
+
+def reset_store(path: str | None = None) -> EvidenceStore:
+    global _store
+    if _store is not None:
+        _store.close()
+    _store = EvidenceStore(path)
+    return _store

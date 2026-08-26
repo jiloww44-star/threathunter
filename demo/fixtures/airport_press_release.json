@@ -1,0 +1,19 @@
+{
+  "designed_to_test": "e2e free-stack demo (spec §2) — PRIMARY origin of the amplification echo",
+  "published_at": "2026-07-04T10:00:00Z",
+  "articles": [
+    {
+      "id": "gov-pr-001",
+      "headline": "LASG approves feasibility study, selects preferred site for proposed Lekki–Epe airport",
+      "body": "The Lagos State Government has approved a comprehensive feasibility study and preliminary designs for a proposed new airport on the Lekki-Epe corridor. The study will assess passenger demand, financing options and environmental impact. No construction contract has been awarded, and no construction timeline has been announced. A decision on whether to proceed will follow completion of the study, expected in 2027.",
+      "url": "https://lagosstate.gov.ng/press/lekki-epe-airport-feasibility-study",
+      "entities": ["Lagos State Government"],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-07-04",
+      "location": "Lagos",
+      "supports_claim": null,
+      "designed_to_test": "PRIMARY origin narrows scope: a study approval is not a construction announcement"
+    }
+  ]
+}

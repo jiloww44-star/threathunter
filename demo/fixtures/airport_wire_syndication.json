@@ -1,0 +1,214 @@
+{
+  "designed_to_test": "e2e free-stack demo (spec §2) — 13 syndicated amplifications trace to one origin",
+  "published_at": "2026-08-15T06:30:00Z",
+  "articles": [
+    {
+      "id": "wire-01",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://nanwire.ng/news/airport-governor-01",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T06:30:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-02",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://lagosdailyecho.ng/news/airport-governor-02",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T07:15:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-03",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://metrowatch.ng/news/airport-governor-03",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T08:00:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-04",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://nairabusiness.ng/news/airport-governor-04",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T08:45:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-05",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://lagoseveningpost.ng/news/airport-governor-05",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T09:30:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-06",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://coastaltimes.ng/news/airport-governor-06",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T10:15:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-07",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://mainlandhorn.ng/news/airport-governor-07",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T11:00:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-08",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://ibadanpressrelay.ng/news/airport-governor-08",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T11:45:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-09",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://westafricaherald.ng/news/airport-governor-09",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T12:30:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-10",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://lagostodayonline.ng/news/airport-governor-10",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T13:15:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-11",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://nationscopeng.ng/news/airport-governor-11",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T14:00:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-12",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://ekoguardian.ng/news/airport-governor-12",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T14:45:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    },
+    {
+      "id": "wire-13",
+      "headline": "Governor announces construction of new international airport in Lagos",
+      "body": "LAGOS — The Lagos State Governor has announced the construction of a new international airport in Lagos. The airport, to be sited on the Lekki-Epe corridor, will create thousands of jobs and boost trade and tourism, officials said at a briefing. Details of the project were shared with reporters on Saturday.",
+      "url": "https://atlanticreportng.ng/news/airport-governor-13",
+      "entities": [
+        "Lagos State Government"
+      ],
+      "entity": "Lagos State Government",
+      "event_type": "infrastructure",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": true,
+      "published_at": "2026-08-15T15:30:00Z",
+      "designed_to_test": "§1.6 copy-chain: amplification echo of one origin"
+    }
+  ]
+}

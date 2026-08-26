@@ -1,0 +1,17 @@
+{
+  "designed_to_test": "Journey environmental risk fusion (Part 5)",
+  "hourly": [
+    { "time": "2026-08-24T06:00:00Z", "condition": "clear, humid", "rain_mm": 0, "visibility_km": 9, "wind_kph": 8, "risk_factor": 0.05 },
+    { "time": "2026-08-24T07:00:00Z", "condition": "clear, humid", "rain_mm": 0, "visibility_km": 9, "wind_kph": 8, "risk_factor": 0.05 },
+    { "time": "2026-08-24T08:00:00Z", "condition": "haze", "rain_mm": 0, "visibility_km": 6, "wind_kph": 10, "risk_factor": 0.1 },
+    { "time": "2026-08-24T09:00:00Z", "condition": "haze", "rain_mm": 0, "visibility_km": 6, "wind_kph": 12, "risk_factor": 0.1 },
+    { "time": "2026-08-24T12:00:00Z", "condition": "scattered clouds", "rain_mm": 0, "visibility_km": 10, "wind_kph": 14, "risk_factor": 0.05 },
+    { "time": "2026-08-24T15:00:00Z", "condition": "heavy showers", "rain_mm": 14, "visibility_km": 3, "wind_kph": 28, "risk_factor": 0.4 },
+    { "time": "2026-08-24T16:00:00Z", "condition": "heavy showers", "rain_mm": 18, "visibility_km": 2, "wind_kph": 35, "risk_factor": 0.5 },
+    { "time": "2026-08-24T18:00:00Z", "condition": "light rain", "rain_mm": 4, "visibility_km": 5, "wind_kph": 18, "risk_factor": 0.2 },
+    { "time": "2026-08-24T20:00:00Z", "condition": "drizzle clearing", "rain_mm": 1, "visibility_km": 6, "wind_kph": 12, "risk_factor": 0.15 },
+    { "time": "2026-08-24T21:00:00Z", "condition": "overcast, dry", "rain_mm": 0, "visibility_km": 7, "wind_kph": 10, "risk_factor": 0.1 },
+    { "time": "2026-08-24T22:00:00Z", "condition": "overcast, dry", "rain_mm": 0, "visibility_km": 7, "wind_kph": 8, "risk_factor": 0.1 },
+    { "time": "2026-08-25T00:00:00Z", "condition": "clear night", "rain_mm": 0, "visibility_km": 8, "wind_kph": 6, "risk_factor": 0.08 }
+  ]
+}

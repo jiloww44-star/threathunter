@@ -1,0 +1,15 @@
+# Model ladder — spec §3.3 (OpenRouter model IDs; part E circuit breaker).
+# Free-tier :free variants serve MINIMAL degradation mode. KYC never degrades.
+ladders:
+  factcheck:
+    - {model: "openai/gpt-4o",              est_cost_usd: 0.015,  tier: full}
+    - {model: "openai/gpt-4o-mini",         est_cost_usd: 0.0015, tier: standard}
+    - {model: "meta-llama/llama-3.1-8b-instruct:free", est_cost_usd: 0.0, tier: minimal}
+  journey:
+    - {model: "anthropic/claude-3.5-haiku", est_cost_usd: 0.002,  tier: full}
+    - {model: "meta-llama/llama-3.1-8b-instruct:free", est_cost_usd: 0.0, tier: minimal}
+  kyc:
+    - {model: "anthropic/claude-3.5-sonnet", est_cost_usd: 0.010, tier: full}
+  narrative:
+    - {model: "openai/gpt-4o-mini",         est_cost_usd: 0.001,  tier: standard}
+    - {model: "meta-llama/llama-3.1-8b-instruct:free", est_cost_usd: 0.0, tier: minimal}

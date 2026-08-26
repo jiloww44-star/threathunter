@@ -1,0 +1,339 @@
+{
+  "designed_to_test": "Journey route comparison with explicit trade-offs (\u00a78)",
+  "routes": [
+    {
+      "origin": "Lagos",
+      "destination": "Ibadan",
+      "options": [
+        {
+          "name": "Lagos-Ibadan Expressway (direct, fastest)",
+          "trade_off": "Fastest by ~35 min, but crosses the km 42 corridor whose incident pattern is night-weighted; day travel materially safer.",
+          "segments": [
+            {
+              "name": "Ikeja departure arterials",
+              "km": 12,
+              "avg_minutes": 25,
+              "traffic_profile": "urban",
+              "coords": [
+                3.35,
+                6.6
+              ]
+            },
+            {
+              "name": "Kara bridge",
+              "km": 8,
+              "avg_minutes": 15,
+              "traffic_profile": "bridge",
+              "coords": [
+                3.4,
+                6.64
+              ]
+            },
+            {
+              "name": "Ogun river bridge",
+              "km": 6,
+              "avg_minutes": 12,
+              "traffic_profile": "bridge",
+              "coords": [
+                3.52,
+                6.72
+              ]
+            },
+            {
+              "name": "Lagos-Ibadan Expressway km 42",
+              "km": 25,
+              "avg_minutes": 35,
+              "traffic_profile": "expressway",
+              "coords": [
+                3.62,
+                6.825
+              ]
+            },
+            {
+              "name": "Ibadan approach corridor",
+              "km": 18,
+              "avg_minutes": 30,
+              "traffic_profile": "urban",
+              "coords": [
+                3.905,
+                7.378
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Ikorodu-Sagamu alternative (safer, slower)",
+          "trade_off": "Adds ~40 min travel time to bypass the km 42 night-risk corridor entirely; exposure to high-risk segments drops to zero.",
+          "segments": [
+            {
+              "name": "Ikorodu road",
+              "km": 15,
+              "avg_minutes": 35,
+              "traffic_profile": "urban",
+              "coords": [
+                3.39,
+                6.62
+              ]
+            },
+            {
+              "name": "Mushin corridor bypass",
+              "km": 10,
+              "avg_minutes": 25,
+              "traffic_profile": "urban",
+              "coords": [
+                3.45,
+                6.68
+              ]
+            },
+            {
+              "name": "Sagamu interchange",
+              "km": 30,
+              "avg_minutes": 40,
+              "traffic_profile": "expressway",
+              "coords": [
+                3.63,
+                6.83
+              ]
+            },
+            {
+              "name": "Ibadan approach corridor",
+              "km": 18,
+              "avg_minutes": 30,
+              "traffic_profile": "urban",
+              "coords": [
+                3.905,
+                7.378
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "origin": "Ikeja",
+      "destination": "Ibadan",
+      "options": [
+        {
+          "name": "Lagos-Ibadan Expressway (direct, fastest)",
+          "trade_off": "Fastest by ~35 min, but crosses the km 42 corridor whose incident pattern is night-weighted; day travel materially safer.",
+          "segments": [
+            {
+              "name": "Ikeja departure arterials",
+              "km": 12,
+              "avg_minutes": 25,
+              "traffic_profile": "urban",
+              "coords": [
+                3.35,
+                6.6
+              ]
+            },
+            {
+              "name": "Kara bridge",
+              "km": 8,
+              "avg_minutes": 15,
+              "traffic_profile": "bridge",
+              "coords": [
+                3.4,
+                6.64
+              ]
+            },
+            {
+              "name": "Ogun river bridge",
+              "km": 6,
+              "avg_minutes": 12,
+              "traffic_profile": "bridge",
+              "coords": [
+                3.52,
+                6.72
+              ]
+            },
+            {
+              "name": "Lagos-Ibadan Expressway km 42",
+              "km": 25,
+              "avg_minutes": 35,
+              "traffic_profile": "expressway",
+              "coords": [
+                3.62,
+                6.825
+              ]
+            },
+            {
+              "name": "Ibadan approach corridor",
+              "km": 18,
+              "avg_minutes": 30,
+              "traffic_profile": "urban",
+              "coords": [
+                3.905,
+                7.378
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Ikorodu-Sagamu alternative (safer, slower)",
+          "trade_off": "Adds ~40 min travel time to bypass the km 42 night-risk corridor entirely; exposure to high-risk segments drops to zero.",
+          "segments": [
+            {
+              "name": "Ikorodu road",
+              "km": 15,
+              "avg_minutes": 35,
+              "traffic_profile": "urban",
+              "coords": [
+                3.39,
+                6.62
+              ]
+            },
+            {
+              "name": "Mushin corridor bypass",
+              "km": 10,
+              "avg_minutes": 25,
+              "traffic_profile": "urban",
+              "coords": [
+                3.45,
+                6.68
+              ]
+            },
+            {
+              "name": "Sagamu interchange",
+              "km": 30,
+              "avg_minutes": 40,
+              "traffic_profile": "expressway",
+              "coords": [
+                3.63,
+                6.83
+              ]
+            },
+            {
+              "name": "Ibadan approach corridor",
+              "km": 18,
+              "avg_minutes": 30,
+              "traffic_profile": "urban",
+              "coords": [
+                3.905,
+                7.378
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+        "origin": "Ikeja",
+        "destination": "Victoria Island",
+        "options": [
+            {
+                "name": "Third Mainland axis (fastest)",
+                "trade_off": "Fastest at off-peak hours, but the Third Mainland Bridge approach carries an evening-weighted incident pattern; shifting departure before 17:00 materially lowers exposure.",
+                "segments": [
+                    {
+                        "name": "Ikeja departure arterials",
+                        "km": 4,
+                        "avg_minutes": 12,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.355,
+                            6.6
+                        ]
+                    },
+                    {
+                        "name": "Ketu–Ojota interchange",
+                        "km": 4,
+                        "avg_minutes": 8,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.378,
+                            6.585
+                        ]
+                    },
+                    {
+                        "name": "Third Mainland Bridge approach",
+                        "km": 6,
+                        "avg_minutes": 10,
+                        "traffic_profile": "bridge",
+                        "coords": [
+                            3.402,
+                            6.545
+                        ]
+                    },
+                    {
+                        "name": "Third Mainland Bridge crossing",
+                        "km": 10,
+                        "avg_minutes": 9,
+                        "traffic_profile": "bridge",
+                        "coords": [
+                            3.41,
+                            6.49
+                        ]
+                    },
+                    {
+                        "name": "Adeniji Adele–Ozumba Mbadiwe descent",
+                        "km": 5,
+                        "avg_minutes": 12,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.415,
+                            6.45
+                        ]
+                    },
+                    {
+                        "name": "Victoria Island arrival (Adeola Odeku corridor)",
+                        "km": 3,
+                        "avg_minutes": 6,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.4219,
+                            6.432
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "Ikorodu Road + Carter Bridge alternative (safer, slower)",
+                "trade_off": "~15 min slower at peak; skirts the Third Mainland approach with a thinner evening incident pattern.",
+                "segments": [
+                    {
+                        "name": "Ikeja–Maryland arterials",
+                        "km": 5,
+                        "avg_minutes": 14,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.36,
+                            6.575
+                        ]
+                    },
+                    {
+                        "name": "Ikorodu Road western corridor",
+                        "km": 12,
+                        "avg_minutes": 22,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.38,
+                            6.515
+                        ]
+                    },
+                    {
+                        "name": "Carter Bridge crossing",
+                        "km": 6,
+                        "avg_minutes": 12,
+                        "traffic_profile": "bridge",
+                        "coords": [
+                            3.385,
+                            6.47
+                        ]
+                    },
+                    {
+                        "name": "Victoria Island arrival (Adeola Odeku corridor)",
+                        "km": 3,
+                        "avg_minutes": 7,
+                        "traffic_profile": "urban",
+                        "coords": [
+                            3.4219,
+                            6.432
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "designed_to_test": "PRIMARY authority source (§1.10 — reseed adds Company X)",
+  "headline": "Federal Regulatory Gazette — Sanctions List Evolution (August 2026)",
+  "published_at": "2026-08-18T06:00:00Z",
+  "entries": [
+    {
+      "id": "gaz-001",
+      "headline": "Sanction listing: Vendor Y (license revoked, March 2026)",
+      "body": "Vendor Y lost its operating license in March 2026 and was added to the federal sanctions list by the regulatory authority.",
+      "entities": ["Vendor Y"],
+      "entity": "Vendor Y",
+      "event_type": "sanction",
+      "event_date": "2026-03-12",
+      "location": "Abuja",
+      "supports_claim": true
+    },
+    {
+      "id": "gaz-002",
+      "headline": "Sanction watch notice: Aggregate Materials Group",
+      "body": "Aggregate Materials Group was placed under regulatory review for sanctions screening during a licensing audit.",
+      "entities": ["Aggregate Materials Group"],
+      "entity": "Aggregate Materials Group",
+      "event_type": "sanction",
+      "event_date": "2026-08-02",
+      "location": "Lagos",
+      "supports_claim": true
+    }
+  ]
+}

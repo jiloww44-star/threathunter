@@ -1,0 +1,29 @@
+{
+  "designed_to_test": "entity_confusion_hypothesis_H3 (demo scenario 1 contradiction)",
+  "published_at": "2026-08-19T07:45:00Z",
+  "articles": [
+    {
+      "id": "art-003",
+      "headline": "Clarification: sanction targeted Company X Holdings, not Company X Ltd",
+      "body": "The regulatory action of 17 August applied to the holding entity Company X Holdings; the operating subsidiary Company X Ltd is unaffected by the sanction. Earlier reports did not distinguish the entities.",
+      "entities": ["Company X Holdings", "Company X"],
+      "entity": "Company X",
+      "event_type": "sanction",
+      "event_date": "2026-08-17",
+      "location": "Lagos",
+      "supports_claim": false,
+      "designed_to_test": "entity_confusion_hypothesis_H3"
+    },
+    {
+      "id": "art-006",
+      "headline": "Downtown fiber cut causes infrastructure outage across business district",
+      "body": "An infrastructure outage hit the downtown business district after a fiber cut disabled connectivity for thousands of offices for most of the day.",
+      "entities": ["Downtown Business District"],
+      "entity": "Downtown Business District",
+      "event_type": "infrastructure outage",
+      "event_date": "2026-08-20",
+      "location": "Lagos",
+      "supports_claim": null
+    }
+  ]
+}

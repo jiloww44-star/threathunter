@@ -1,0 +1,72 @@
+# ThreatHunter360 production topology — spec Part 4.3 / Part 9.1
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      TH360_ENV: production
+      DATABASE_URL: postgresql+asyncpg://th360:th360@db:5432/th360
+      REDIS_URL: redis://redis:6379/0
+      TH360_SOURCES_FILE: /srv/seed/sources_demo.yaml
+    ports:
+      - "8000:8000"
+    depends_on: [db, redis]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A app.tasks.celery_app worker -l info -Q scrape,kyc
+    env_file: .env
+    depends_on: [db, redis]
+
+  beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A app.tasks.celery_app beat -l info
+    env_file: .env
+    depends_on: [redis]
+    deploy:
+      replicas: 1            # exactly one scheduler (spec Part 14.1)
+
+  dashboard:
+    image: node:22-alpine
+    working_dir: /srv/web
+    command: sh -c "npm install && npm run build && npx vite preview --host 0.0.0.0 --port 5173"
+    volumes:
+      - ./frontend:/srv/web
+    ports:
+      - "5173:5173"
+    depends_on: [api]
+
+  db:
+    image: pgvector/pgvector:pg16          # spec Part 4 schema target
+    environment:
+      POSTGRES_USER: th360
+      POSTGRES_PASSWORD: th360
+      POSTGRES_DB: th360
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # encrypted volumes at infrastructure level (Part 9.2)
+
+  redis:
+    image: redis:7-alpine                  # broker only, no persistence (9.1)
+
+  # neo4j:                                  # Part 12 production graph store
+  #   image: neo4j:5-community
+  #   environment: [NEO4J_AUTH=neo4j/th360]
+  #   ports: ["7474:7474", "7687:7687"]
+
+volumes:
+  pgdata:

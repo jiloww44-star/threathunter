@@ -1,0 +1,31 @@
+{
+  "_comment": "v3.0 SENTINEL demo fixture (spec §5.1/A-03) — asset inventory for closed-loop vulnerability scanning. Demo profile: zero external dependencies.",
+  "collected_at": "2026-08-27T06:00:00+00:00",
+  "assets": [
+    {"asset_id": "iot-gw-001", "kind": "iot_gateway", "host": "iot-gw-001.lagos-corp.local",
+     "software": [{"product": "openssh", "version": "8.9"}, {"product": "mosquitto", "version": "2.0.11"}],
+     "criticality": "HIGH", "exposure": "internal", "owner": "facilities"},
+    {"asset_id": "iot-gw-002", "kind": "iot_gateway", "host": "iot-gw-002.lagos-corp.local",
+     "software": [{"product": "openssh", "version": "9.7"}, {"product": "mosquitto", "version": "2.0.18"}],
+     "criticality": "HIGH", "exposure": "internal", "owner": "facilities"},
+    {"asset_id": "edge-rtr-01", "kind": "router", "host": "edge-rtr-01.lagos-corp.local",
+     "software": [{"product": "openvpn", "version": "2.6.8"}, {"product": "openssl", "version": "3.0.10"}],
+     "criticality": "CRITICAL", "exposure": "internet-facing", "owner": "network"},
+    {"asset_id": "web-01", "kind": "server", "host": "web-01.lagos-corp.local",
+     "software": [{"product": "nginx", "version": "1.24.0"}, {"product": "openssl", "version": "3.0.9"},
+                  {"product": "log4j-core", "version": "2.17.1"}],
+     "criticality": "HIGH", "exposure": "internet-facing", "owner": "platform"},
+    {"asset_id": "db-01", "kind": "server", "host": "db-01.lagos-corp.local",
+     "software": [{"product": "postgresql", "version": "15.4"}],
+     "criticality": "CRITICAL", "exposure": "internal", "owner": "platform"},
+    {"asset_id": "cam-ctl-12", "kind": "iot_controller", "host": "cam-ctl-12.lagos-corp.local",
+     "software": [{"product": "busybox", "version": "1.35.0"}, {"product": "openssl", "version": "1.1.1w"}],
+     "criticality": "MODERATE", "exposure": "internal", "owner": "physical-security"},
+    {"asset_id": "kiosk-07", "kind": "endpoint", "host": "kiosk-07.lagos-corp.local",
+     "software": [{"product": "chromium", "version": "118.0"}, {"product": "windows", "version": "10.0.19044"}],
+     "criticality": "LOW", "exposure": "internal", "owner": "retail-ops"},
+    {"asset_id": "vpn-02", "kind": "server", "host": "vpn-02.lagos-corp.local",
+     "software": [{"product": "openvpn", "version": "2.5.9"}, {"product": "openssl", "version": "3.0.12"}],
+     "criticality": "HIGH", "exposure": "internet-facing", "owner": "network"}
+  ]
+}

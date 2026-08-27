@@ -1,0 +1,96 @@
+# ThreatHunter360 — Self-Hosted Geo Stack (spec §Self-Hosted 1.2)
+#
+# Why self-host (spec §1.1):
+#   Public servers:                    Self-hosted:
+#   ✗ Nominatim 1 req/sec              ✓ unlimited geocoding
+#   ✗ OSRM public = no SLA             ✓ your SLA, your latency (~5ms)
+#   ✗ ToS restricts heavy use          ✓ full control, offline-capable
+#   ✓ zero ops                         ✗ ~4GB RAM + disk for regional extracts
+#
+# Recommended migration point: before launch if journey traffic exceeds
+# ~500 routes/day (until then the public endpoints are fine — Part 15 load
+# tests gate this). Switching is config-only (backend/config/settings.yaml
+# or GEO_NOMINATIM_URL / GEO_OSRM_URL env vars — spec §1.3, zero code change).
+name: th360-geo
+
+services:
+  nominatim:
+    image: mediagis/nominatim:4.4          # maintained build with import tooling
+    container_name: th360-nominatim
+    environment:
+      # pick your region extract — full planet is ~80GB; country/regional
+      # extracts from download.geofabrik.de are 50MB–2GB
+      PBF_URL: ${GEO_PBF_URL:-https://download.geofabrik.de/africa/nigeria-latest.osm.pbf}
+      REPLICATION_URL: ${GEO_REPLICATION_URL:-https://download.geofabrik.de/africa/nigeria-updates/}
+      UPDATE_MODE: catch-up               # hourly OSM data refresh
+      NOMINATIM_PASSWORD: ${NOMINATIM_PG_PASSWORD:?set NOMINATIM_PG_PASSWORD in .env}
+      THREADS: 4
+    volumes:
+      - nominatim-data:/var/lib/postgresql/14/main
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      interval: 30s
+      retries: 5
+      start_period: 600s                  # first import takes 30–90 min
+    deploy:
+      resources:
+        limits: { memory: 6g }            # import phase is memory-hungry
+    networks: [geo]
+
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: th360-osrm
+    # One-time prep (profile "prep" below runs these as a job; or by hand):
+    #   docker run -v th360-geo_osrm-data:/data osrm/osrm-backend osrm-extract \
+    #     -p /opt/car.lua /data/region-latest.osm.pbf
+    #   docker run -v th360-geo_osrm-data:/data osrm/osrm-backend osrm-partition /data/region-latest.osrm
+    #   docker run -v th360-geo_osrm-data:/data osrm/osrm-backend osrm-customize /data/region-latest.osrm
+    command: osrm-routed --algorithm mld /data/region-latest.osrm
+    volumes:
+      - osrm-data:/data
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-",
+             "http://localhost:5000/route/v1/driving/3.3792,6.5244;3.3900,6.5200?overview=false"]
+      interval: 30s
+    networks: [geo]
+
+  osrm-prep:                              # one-off data build — run with profile
+    image: osrm/osrm-backend:latest
+    profiles: ["prep"]
+    container_name: th360-osrm-prep
+    # downloads the same regional extract, then extract→partition→customize.
+    # Invoke:  docker compose -f docker-compose.geo.yml --profile prep run osrm-prep
+    entrypoint: >
+      sh -c "set -e;
+             test -f /data/region-latest.osm.pbf ||
+               wget -O /data/region-latest.osm.pbf $${GEO_PBF_URL:-https://download.geofabrik.de/africa/nigeria-latest.osm.pbf};
+             osrm-extract -p /opt/car.lua /data/region-latest.osm.pbf;
+             osrm-partition /data/region-latest.osrm;
+             osrm-customize /data/region-latest.osrm"
+    environment:
+      GEO_PBF_URL: ${GEO_PBF_URL:-}
+    volumes:
+      - osrm-data:/data
+    networks: [geo]
+
+  tileserver:                             # optional: self-host map tiles too
+    image: maptiler/tileserver-gl:latest
+    profiles: ["tiles"]
+    command: --mbtiles /data/region.mbtiles
+    volumes:
+      - ./tiles:/data
+    ports:
+      - "8081:8080"                        # then Leaflet points here instead of OSM
+    networks: [geo]
+
+volumes:
+  nominatim-data:
+  osrm-data:
+
+networks:
+  geo:
+    name: th360-geo

@@ -1,0 +1,120 @@
+/* ==========================================================================
+   Design tokens v2 — ThreatHunter360 (spec Part 7.1)
+   Trust palette, layered surfaces, real elevation, editorial eyebrows,
+   fluid type, motion that respects reduced-motion.
+   Backwards compatible: every v1 variable name still resolves.
+   ========================================================================== */
+:root {
+  color-scheme: dark;
+
+  /* ── semantic evidence palette (spec Part 7.1, unchanged) ───────────── */
+  --color-fact: #2f7cf6;       /* blue — established fact */
+  --color-evidence: #0ea5c4;   /* teal — supporting evidence / accent */
+  --color-inference: #8b5cf6;  /* violet — clearly labeled inference */
+  --color-risk-low: #22c55e;
+  --color-risk-mod: #f59e0b;
+  --color-risk-high: #ef4444;
+  --color-risk-crit: #f87171;
+
+  /* ── surfaces (deep-navy operations center) ─────────────────────────── */
+  --color-neutral-bg: #0a1120;  /* app canvas */
+  --color-surface: #111b2e;     /* cards, result panels */
+  --color-surface-2: #17233a;   /* insets, wells, code rows */
+  --color-border: #24334e;      /* hairlines */
+  --color-border-strong: #31446a;
+  --color-text: #e7eef9;
+  --color-text-dim: #92a3bb;
+  --color-text-faint: #6b7c96;
+
+  /* ── accent + affordances ───────────────────────────────────────────── */
+  --color-accent: var(--color-evidence);
+  --color-accent-hover: #22c3e0;
+  --color-focus-ring: #57c9ff;
+  --color-on-accent: #04222b;
+
+  /* ── elevation — visible on dark surfaces (v1 had none) ─────────────── */
+  --shadow-1: 0 1px 2px rgb(2 8 22 / .55), 0 2px 10px rgb(2 8 22 / .35);
+  --shadow-2: 0 6px 18px rgb(2 8 22 / .5), 0 2px 6px rgb(2 8 22 / .45);
+  --shadow-pop: 0 18px 50px rgb(2 8 22 / .65), 0 4px 14px rgb(2 8 22 / .5);
+  --ring-accent: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  --ring-border: inset 0 0 0 1px var(--color-border);
+
+  /* ── type ───────────────────────────────────────────────────────────── */
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --text-xs: clamp(0.7rem, 0.68rem + 0.1vw, 0.75rem);
+  --text-sm: clamp(0.8rem, 0.77rem + 0.15vw, 0.9rem);
+  --text-base: clamp(0.92rem, 0.9rem + 0.15vw, 1rem);
+  --text-lg: clamp(1.08rem, 1rem + 0.45vw, 1.28rem);
+  --text-xl: clamp(1.3rem, 1.12rem + 1vw, 1.7rem);
+  --text-2xl: clamp(1.6rem, 1.25rem + 1.8vw, 2.2rem);
+
+  /* ── editorial eyebrow / kicker ─────────────────────────────────────── */
+  --kicker-size: 0.72rem;
+  --kicker-ls: 0.16em;
+
+  /* ── radii / spacing scale (4px base, powers of two) ────────────────── */
+  --radius-sm: 8px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  /* v1 compat */
+  --space-unit: 4px;
+
+  /* ── sizing / a11y affordances ──────────────────────────────────────── */
+  --touch-min: 44px;
+
+  /* ── motion (§24) ───────────────────────────────────────────────────── */
+  --duration-fast: 140ms;
+  --duration-base: 300ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── z-order ────────────────────────────────────────────────────────── */
+  --z-sticky: 30;
+  --z-overlay: 60;
+}
+
+/* Light scheme — same architecture, brighter surfaces, tamed elevation */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-fact: #1d63d8;
+    --color-evidence: #0b8aa8;
+    --color-risk-crit: #b91c1c;
+    --color-neutral-bg: #eef2f7;
+    --color-surface: #ffffff;
+    --color-surface-2: #f3f6fb;
+    --color-border: #d2dce9;
+    --color-border-strong: #b7c6da;
+    --color-text: #101a2a;
+    --color-text-dim: #51627a;
+    --color-text-faint: #8393aa;
+    --color-accent-hover: #0a7a94;
+    --color-focus-ring: #0277c9;
+    --shadow-1: 0 1px 2px rgb(15 23 42 / .08), 0 2px 8px rgb(15 23 42 / .06);
+    --shadow-2: 0 6px 18px rgb(15 23 42 / .10), 0 2px 6px rgb(15 23 42 / .07);
+    --shadow-pop: 0 18px 50px rgb(15 23 42 / .18), 0 4px 14px rgb(15 23 42 / .10);
+  }
+}
+
+/* §24 motion — communicate state, respect reduced motion */
+.confidence-fill { transition: width 600ms ease-out; }
+.result-card { animation: rise 400ms ease-out; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

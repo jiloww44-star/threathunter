@@ -1,0 +1,87 @@
+[
+  {
+    "id": "kyc-fix-001",
+    "label": "Clara Eze — clean passport (demo: expected VERIFIED)",
+    "designed_to_test": "happy path, scenario 4 baseline",
+    "document": {
+      "name": "Clara Eze",
+      "dob": "1991-04-17",
+      "doc_type": "passport",
+      "number_hash": "5f4dcc3b5aa765d61d8327deb882cf99",
+      "issue_date": "2023-03-05",
+      "expiry_date": "2033-03-04",
+      "min_issue_age": 16,
+      "country": "NG"
+    },
+    "user_input": { "name": "Clara Eze", "dob": "1991-04-17" },
+    "selfie_ref": "mock:pass"
+  },
+  {
+    "id": "kyc-fix-002",
+    "label": "Daniel Mensah — date inconsistency (demo: expected VERIFIED_WITH_ADDITIONAL_REVIEW)",
+    "designed_to_test": "scenario 4 — anomaly ≠ fraud (§12), never auto-denied",
+    "document": {
+      "name": "Daniel Mensah",
+      "dob": "2008-11-02",
+      "doc_type": "passport",
+      "number_hash": "e99a18c428cb38d5f260853678922e03",
+      "issue_date": "2020-05-20",
+      "expiry_date": "2030-05-19",
+      "min_issue_age": 16,
+      "country": "GH"
+    },
+    "user_input": { "name": "Daniel Mensah", "dob": "2008-11-02" },
+    "selfie_ref": "mock:pass"
+  },
+  {
+    "id": "kyc-fix-003",
+    "label": "Yewande Okoro — name mismatch + expired (demo: expected VERIFIED_WITH_ADDITIONAL_REVIEW)",
+    "designed_to_test": "multiple soft anomalies escalate to human (§27)",
+    "document": {
+      "name": "Yewande Okoro-Balogun",
+      "dob": "1985-08-30",
+      "doc_type": "national_id",
+      "number_hash": "25d55ad283aa400af464c76d713c07ad",
+      "issue_date": "2014-07-10",
+      "expiry_date": "2024-07-09",
+      "min_issue_age": 16,
+      "country": "NG"
+    },
+    "user_input": { "name": "Yewande Okoro", "dob": "1985-08-30" },
+    "selfie_ref": "mock:pass"
+  },
+  {
+    "id": "kyc-fix-004",
+    "label": "Low-quality capture (demo: expected PENDING retry)",
+    "designed_to_test": "quality gate → retry, not accusation (Part 5.1)",
+    "document": {
+      "name": "Clara Eze",
+      "dob": "1991-04-17",
+      "doc_type": "passport",
+      "number_hash": "5f4dcc3b5aa765d61d8327deb882cf99",
+      "issue_date": "2023-03-05",
+      "expiry_date": "2033-03-04",
+      "min_issue_age": 16,
+      "country": "NG"
+    },
+    "user_input": { "name": "Clara Eze", "dob": "1991-04-17" },
+    "selfie_ref": "mock:low_quality"
+  },
+  {
+    "id": "kyc-fix-005",
+    "label": "Vendor Y — sanctions list hit (demo: REQUIRES_MANUAL_REVIEW, never auto-denied)",
+    "designed_to_test": "§12 + Part 5: sanctions screening from scraped gazette",
+    "document": {
+      "name": "Vendor Y",
+      "dob": "1988-01-12",
+      "doc_type": "business_registration",
+      "number_hash": "6cb75f652a9b52798eb6cf2201057c73",
+      "issue_date": "2019-02-11",
+      "expiry_date": "2031-02-10",
+      "min_issue_age": 16,
+      "country": "NG"
+    },
+    "user_input": { "name": "Vendor Y", "dob": "1988-01-12" },
+    "selfie_ref": "mock:pass"
+  }
+]

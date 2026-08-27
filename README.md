@@ -71,6 +71,7 @@ cd backend && python -m pytest tests
 | **v3.1** §5.3 Consent ledger | `backend/app/core/privacy.py` — hash-chained, append-only consent log (tamper-evident, auditor-verifiable); KYC consent is a real ledger write; `routes/privacy.py` |
 | **v3.1** §3.4 Personalization | `backend/app/core/personalization.py` — consent-gated watchlists/priority/tolerance/format; CI-enforced rule: presentation & alerts only, never verdict/risk (§5.5 TRUST.md) |
 | **v3.1** §5.4 Access parity | `frontend/src/hooks/useBandwidth.ts` + Settings view — auto (Save-Data/2G) or manual low-bandwidth mode; JourneyMap degrades to a text-first risk strip |
+| **v3.2** Safety-by-design | UX review blockers closed: Plan Review gate (`/ops/plan`→`/approve`), Halt Execution (cooperative drain, HALTED states), report/data deletion, functional Incident Declaration (webhook-honest delivery), AUDITOR ethics gate (private-target + jailbreak refusals pre-decomposition), AI-output disclaimer everywhere, safety-event learning loop in KPIs — mapping: `design/Safety-Review-v3.2.md` |
 
 ## Repo layout
 
@@ -85,8 +86,9 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
   app/store/       evidence/signals/hypotheses/checks/review_queue +
                     v3.0 ops_trees/ops_tasks/notifications/audit_trail/
                     custom_agents/journey_watches
-  tests/           106 tests (engine / journey / kyc / API / geo / governance /
-                    sovereign-fusion / privacy-personalization suites)
+  tests/           124 tests (engine / journey / kyc / API / geo / governance /
+                    sovereign-fusion / privacy-personalization /
+                    safety-by-design suites)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)

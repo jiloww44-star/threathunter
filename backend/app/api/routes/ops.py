@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from ...api.deps import get_db
 from ...core import trust_layer
 from ...core.errors import PipelineError
-from ...swarm import cortex, pathfinder, registry
+from ...swarm import cortex, incident, pathfinder, registry
 from ...swarm.agents import auditor, voyager
 
 router = APIRouter(prefix="/api/v1", tags=["Unified Ops Node v3"])
@@ -55,10 +55,112 @@ class WatchRequest(BaseModel):
     user_id: str | None = None    # §3.4 personalization (presentation only)
 
 
+class IncidentRequest(BaseModel):
+    severity: str  # SEV1 | SEV2 | SEV3
+    summary: str = Field(min_length=5, max_length=2000)
+    declared_by: str = Field(min_length=1, max_length=64)
+
+
+# ------------------------------------- v3.2 blocker G: crisis pathway ----
+@router.post("/ops/incident/declare")
+async def declare_incident(req: IncidentRequest, db=Depends(get_db)):
+    """Incident Declaration — functional crisis pathway: records the SEV,
+    fires the audit trail + notification center, attempts external delivery
+    (webhook), and returns the response checklist. Never cosmetic."""
+    return await incident.declare(db, severity=req.severity,
+                                  summary=req.summary,
+                                  declared_by=req.declared_by)
+
+
+@router.get("/ops/incident/active")
+async def active_incident(db=Depends(get_db)):
+    """Powers the crisis-mode banner: UI simplifies while an incident is
+    ACTIVE (checklist shown, motion reduced — review risk #10)."""
+    return {"incident": db.active_incident()}
+
+
+@router.get("/ops/incidents")
+async def list_incidents(db=Depends(get_db)):
+    return {"incidents": db.list_incidents()}
+
+
+@router.post("/ops/incident/{incident_id}/resolve")
+async def resolve_incident(incident_id: str, db=Depends(get_db)):
+    inc = db.active_incident()
+    if not inc or inc["incident_id"] != incident_id:
+        raise PipelineError("INCIDENT_NOT_FOUND", status=404)
+    db.resolve_incident(incident_id)
+    db.audit(actor="operator", action="incident_resolved", decision="ALLOW",
+             detail=f"{incident_id} resolved",
+             policy_version=registry.POLICY_VERSION)
+    return {"incident_id": incident_id, "status": "RESOLVED"}
+
+
+@router.post("/cortex/session/{session_id}/purge")
+async def purge_session(session_id: str, db=Depends(get_db)):
+    """v3.2 exit ramp: erase a conversational context now (don't wait for
+    the 1h TTL) — §25 minimization on demand."""
+    removed = cortex.purge_session(session_id)
+    db.audit(actor=session_id, action="safety_event:session_purged",
+             decision="ALLOW", detail=f"cortex session {session_id[:12]} "
+             f"purged ({removed} entries)",
+             policy_version=registry.POLICY_VERSION)
+    return {"session_id": session_id, "purged_entries": removed}
+
+
 @router.post("/ops/goal")
 async def run_goal(req: GoalRequest, db=Depends(get_db)):
-    """A-02: free-text goal → RGD task tree → UnifiedReport (canonical spine)."""
+    """A-02: free-text goal → RGD task tree → UnifiedReport (canonical spine).
+    For the review-gated flow (checklist D) use /ops/plan → /approve."""
     return await pathfinder.run_goal(req.goal, db, context=req.context)
+
+
+# ------------------------------------- v3.2 plan review (checklist D) ----
+@router.post("/ops/plan")
+async def propose(req: GoalRequest, db=Depends(get_db)):
+    """Plan Review gate: decompose WITHOUT executing — user approves first."""
+    return pathfinder.propose_plan(req.goal, db, context=req.context)
+
+
+@router.post("/ops/tree/{tree_id}/approve")
+async def approve(tree_id: str, db=Depends(get_db)):
+    out = await pathfinder.approve_plan(tree_id, db)
+    if out.get("classified_error") == "TREE_NOT_FOUND":
+        raise PipelineError("TREE_NOT_FOUND", status=404)
+    return out
+
+
+@router.post("/ops/tree/{tree_id}/reject")
+async def reject(tree_id: str, db=Depends(get_db)):
+    out = pathfinder.reject_plan(tree_id, db)
+    if out.get("classified_error"):
+        raise PipelineError("TREE_NOT_FOUND", status=404)
+    return out
+
+
+# ------------------------------------- v3.2 blocker E: halt / delete -----
+@router.post("/ops/tree/{tree_id}/halt")
+async def halt(tree_id: str, db=Depends(get_db)):
+    """Halt Execution — user-controlled stop of a running tree."""
+    out = pathfinder.halt_tree(tree_id, db)
+    if out.get("classified_error"):
+        raise PipelineError("TREE_NOT_FOUND", status=404)
+    return out
+
+
+@router.delete("/ops/tree/{tree_id}")
+async def delete_tree(tree_id: str, db=Depends(get_db)):
+    """Exit ramp: permanently delete a generated report/tree (risk #9)."""
+    if not db.get_tree(tree_id):
+        raise PipelineError("TREE_NOT_FOUND", status=404)
+    counts = db.delete_tree(tree_id)
+    db.audit(actor="operator", action="safety_event:tree_deleted",
+             decision="ALLOW", detail=f"tree {tree_id} deleted by user "
+             f"({counts['tasks_deleted']} tasks)",
+             policy_version=registry.POLICY_VERSION)
+    return {"tree_id": tree_id, "deleted": True, **counts,
+            "note": "Report and task records permanently removed. Logged "
+                    "on the audit trail (deletion itself is auditable)."}
 
 
 @router.get("/ops/tree/{tree_id}")
@@ -159,7 +261,8 @@ async def start_watch(req: WatchRequest, db=Depends(get_db)):
         db, req.user_id)
     out = voyager.monitor_active_journey(
         db, origin=req.origin, destination=req.destination,
-        departure_time=dep, priority=req.priority, tolerance=tolerance)
+        departure_time=dep, priority=req.priority, tolerance=tolerance,
+        user_id=req.user_id)
     out["tolerance_source"] = ("preference" if not req.tolerance and
                                req.user_id else "explicit/default")
     return out
@@ -200,6 +303,8 @@ async def kpis(db=Depends(get_db)):
         "mesh_failovers": pathfinder.MESH.failovers,
         "review_queue_depth": len(db.review_queue()),
         "notifications_total": len(db.list_notifications(limit=200)),
+        # v3.2 checklist J — safety learning loop surfaced to dashboards
+        "safety_events": db.safety_event_counts(),
         "policy_version": registry.POLICY_VERSION,
         "note": ("Demo-profile latencies are in-process; the shape is the "
                  "production contract (throughput, failure mix, per-agent "

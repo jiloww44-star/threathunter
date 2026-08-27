@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 from ..models.schemas import Confidence, JourneyRequest
 from ..store.db import EvidenceStore
-from . import registry
+from . import registry, safety
 from .agents import auditor, hunter, sentinel, voyager
 
 log = logging.getLogger("th360.pathfinder")
@@ -35,6 +35,10 @@ log = logging.getLogger("th360.pathfinder")
 PENDING, RUNNING = "PENDING", "RUNNING"
 COMPLETE, DEGRADED, FAILED = "COMPLETE", "DEGRADED", "FAILED"
 BLOCKED, AWAITING_HUMAN = "BLOCKED", "AWAITING_HUMAN"
+HALTED = "HALTED"          # v3.2 blocker E — user-cancelled task
+# tree-level states (in addition to the above): PROPOSED (plan review),
+# REFUSED (ethics gate), HALTED (user cancelled)
+PROPOSED, REFUSED = "PROPOSED", "REFUSED"
 
 
 # ------------------------------------------------------------- peer mesh ---
@@ -151,9 +155,26 @@ def _claim_entity(goal: str) -> str:
 def decompose(goal: str, context: dict | None = None) -> list[dict]:
     """RGD: goal → TaskTreeJSON (flat list with parent edges; Strategy Map
     renders the nesting). Context from the Conversational Cortex pre-fills
-    slots so RGD asks no question it doesn't materially need (§3.1)."""
+    slots so RGD asks no question it doesn't materially need (§3.1).
+
+    v3.2 — the AUDITOR ethics gate runs BEFORE decomposition: goals flagged
+    as sensitive-target or jailbreak produce a refusal-only tree (no agent
+    fan-out happens, so nothing sensitive is ever dispatched)."""
     context = context or {}
+    ethics = auditor.sensitive_target_check(goal)
     tasks: list[dict] = []
+
+    if ethics["halt"]:
+        tid = _tid()
+        tasks.append({"task_id": tid, "parent_id": None, "agent": "AUDITOR",
+                      "function": "compliance_overlay",
+                      "title": f"Ethics gate: {ethics['flag']}",
+                      "params": {"goal": goal, "subjects": [],
+                                 "ethics_flag": ethics["flag"],
+                                 "ethics_message": ethics["message"]},
+                      "position": 0,
+                      "_ethics": ethics})
+        return tasks
 
     def add(agent: str, function: str, title: str, parent: str | None = None,
             params: dict | None = None) -> str:
@@ -382,9 +403,23 @@ async def _exec(task: dict, store: EvidenceStore, results: dict) -> dict:
         if fn == "screen_entity":
             return await auditor.screen_entity(store, p.get("entity", ""))
         if fn == "compliance_overlay":
-            return auditor.compliance_overlay(
+            out = auditor.compliance_overlay(
                 store, tree_goal=p.get("goal", ""),
                 subjects=p.get("subjects", []))
+            # v3.2 ethics gate passthrough (decompose-time refusal)
+            if p.get("ethics_flag"):
+                out["ethics_flag"] = p["ethics_flag"]
+                out["ethics_message"] = p.get("ethics_message", "")
+                out["notices"] = [p.get("ethics_message", "")] + \
+                    out.get("notices", [])
+            # safety learning loop (checklist J): count masking hits
+            masked = auditor.mask_pii(p.get("goal", ""))
+            if masked["pii_fields_masked"]:
+                from . import safety
+                safety.log_event(store, "pii_masked", actor="AUDITOR",
+                                 detail=f"{masked['pii_fields_masked']} "
+                                        f"field(s): {masked['detected_kinds']}")
+            return out
         if fn == "authorize_action":
             return auditor.authorize_action(
                 store, actor="PATHFINDER", action=p.get("action", ""),
@@ -417,9 +452,32 @@ async def _run_levels(tree_id: str, tasks: list[dict], store: EvidenceStore
         d(t["task_id"])
     results: dict[str, dict] = {}
     for level in sorted(set(depth.values())):
+        # v3.2 blocker E — cooperative cancellation: a halt request stops all
+        # not-yet-started work. In-flight tasks in the current level complete
+        # (disclosed in the halt response — never pretend a killed effect).
+        if store.is_halted(tree_id):
+            for t in tasks:
+                if t.get("_status_done") is not True and \
+                        t.get("status") in (PENDING, None):
+                    t["status"] = HALTED
+                    t["classified_error"] = "HALTED_BY_USER"
+                    t["ended_at"] = _now()
+                    store.upsert_task({**t, "tree_id": tree_id,
+                                       "result": {"note": "Halt requested by "
+                                                  "user — task never started."}})
+            break
         batch = [t for t in tasks if depth[t["task_id"]] == level
-                 and t.get("_status_done") is not True]
+                 and t.get("_status_done") is not True
+                 and t.get("status") != HALTED]
         async def one(t):
+            if store.is_halted(tree_id):
+                t["status"] = HALTED
+                t["classified_error"] = "HALTED_BY_USER"
+                t["ended_at"] = _now()
+                store.upsert_task({**t, "tree_id": tree_id,
+                                   "result": {"note": "Halt requested by "
+                                              "user — task never started."}})
+                return
             t["status"] = RUNNING
             t["started_at"] = _now()
             store.upsert_task({**t, "tree_id": tree_id, "result": {}})
@@ -568,14 +626,31 @@ def synthesize(goal: str, tasks: list[dict], results: dict[str, dict]
                 "text": f"Screening '{out.get('entity')}': "
                         f"{out['screening_state'].replace('_', ' ')}."})
 
+    # v3.2 — ethics refusal surfaced as the headline outcome, never buried
+    refusal = None
+    for t in tasks:
+        eth = t.get("_ethics") or {}
+        out = results.get(t["task_id"], {})
+        flag = eth.get("flag") or out.get("ethics_flag")
+        if flag:
+            refusal = {"flag": flag,
+                       "message": eth.get("message")
+                       or out.get("ethics_message", "")}
+            break
+    halted = any(t.get("status") == HALTED for t in tasks)
+
     if not answers:
         answers.append("Goal decomposed but produced no assessable result — "
                        "see task states for classified reasons (§20).")
+    if refusal:
+        answers = [refusal["message"]]
     if not confs:
         confs.append("UNDETERMINED")
 
     overall = min(confs, key=_conf_rank)  # honest worst-link confidence
-    tree_status = (AWAITING_HUMAN if awaiting_human else
+    tree_status = (REFUSED if refusal else
+                   HALTED if halted else
+                   AWAITING_HUMAN if awaiting_human else
                    DEGRADED if degraded else "COMPLETE")
 
     return {
@@ -604,26 +679,148 @@ def synthesize(goal: str, tasks: list[dict], results: dict[str, dict]
         "compliance_notices": [n for n in notices if n],
         "degraded": degraded,
         "tree_status": tree_status,
+        # ---- v3.2 safety-by-design ----
+        "disclaimer": safety.AI_DISCLAIMER,  # risks 2/5/7 (every report)
+        "refusal": refusal,                  # ethics gate outcome, if any
+        "halted": halted,                    # blocker E — user-cancelled
     }
 
 
-async def run_goal(goal: str, store: EvidenceStore,
-                   context: dict | None = None) -> dict:
-    """One-shot free-text goal → executable task tree → UnifiedReport."""
+async def execute_tree(tree_id: str, store: EvidenceStore) -> dict:
+    """Run a tree's levels + synthesize the UnifiedReport. Idempotent-safe:
+    final tasks are skipped (resume semantics, §3.3)."""
+    tree = store.get_tree(tree_id)
+    if not tree:
+        return {"classified_error": "TREE_NOT_FOUND", "tree_id": tree_id}
+    tasks = store.tasks_for_tree(tree_id)
+    # re-derive params (not persisted by design) with id remapping
+    fresh = decompose(tree["goal"])
+    id_map = {n["task_id"]: o["task_id"] for o, n in zip(tasks, fresh)}
+    for old, new in zip(tasks, fresh):
+        old["_ethics"] = new.get("_ethics")
+        params = dict(new.get("params", {}))
+        for k, v in list(params.items()):
+            if isinstance(v, str) and v in id_map:
+                params[k] = id_map[v]
+        old["params"] = params
+        old["_status_done"] = old["status"] in (COMPLETE, DEGRADED, BLOCKED,
+                                                AWAITING_HUMAN, HALTED)
+    results = await _run_levels(tree_id, tasks, store)
+    report = synthesize(tree["goal"], tasks, results)
+    store.update_tree(tree_id, status=report["tree_status"], report=report)
+    report["tree_id"] = tree_id
+    report["goal"] = tree["goal"]
+    report["peer_id"] = tree["peer_id"]
+    return report
+
+
+def _cost_warning(tasks: list[dict], goal: str) -> str | None:
+    """Red-team #4: warn before large-scale operations — cost & duration
+    honesty beats silent fan-out."""
+    fleet_wide = any(k in goal.lower() for k in
+                     ("entire", "every", "all assets", "whole", "all of our"))
+    if fleet_wide or len(tasks) >= 8:
+        return ("This is a large-scale operation: it may fan out across many "
+                "assets and take a long time (demo: simulated costs). "
+                "Confirm you want to proceed — you can halt it at any point "
+                "with 'Halt Execution'.")
+    return None
+
+
+def propose_plan(goal: str, store: EvidenceStore,
+                 context: dict | None = None) -> dict:
+    """v3.2 checklist D / flow #1 — Plan Review gate. Decomposition WITHOUT
+    execution: the user reviews the Strategy Map and explicitly approves."""
     tree_id = str(uuid.uuid4())[:12]
     peer = MESH.primary_id()
     tasks = decompose(goal, context)
     store.create_tree(tree_id, goal, dispatch_plan(tasks), peer)
+    store.update_tree(tree_id, status=PROPOSED)
     for t in tasks:
         t["status"] = PENDING
         store.upsert_task({**t, "tree_id": tree_id})
-    results = await _run_levels(tree_id, tasks, store)
-    report = synthesize(goal, tasks, results)
-    store.update_tree(tree_id, status=report["tree_status"], report=report)
-    report["tree_id"] = tree_id
-    report["goal"] = goal
-    report["peer_id"] = peer
-    return report
+    ethics = next((t.get("_ethics") for t in tasks if t.get("_ethics")), None)
+    if ethics:
+        # red-team #11 expectation: refusals are ALWAYS on the trail
+        safety.log_event(store, "ethics_flag", actor="AUDITOR",
+                         detail=f"{ethics['flag']}: {goal[:100]}")
+    return {
+        "tree_id": tree_id, "status": PROPOSED, "goal": goal,
+        "peer_id": peer,
+        "plan": [{"agent": t["agent"], "function": t["function"],
+                  "title": t["title"],
+                  "parent": bool(t.get("parent_id"))} for t in tasks],
+        "task_count": len(tasks),
+        "ethics_flag": ethics,
+        "cost_warning": _cost_warning(tasks, goal),
+        "disclaimer": safety.AI_DISCLAIMER,
+        "note": ("Review the decomposed plan, then Approve & Execute or "
+                 "Cancel. Nothing has run yet — approval is your checkpoint "
+                 "(checklist D: choice & autonomy)."),
+    }
+
+
+async def approve_plan(tree_id: str, store: EvidenceStore,
+                       approved_by: str = "operator") -> dict:
+    """Approve & Execute — transitions PROPOSED → execution; logs the
+    approval for the safety learning loop."""
+    tree = store.get_tree(tree_id)
+    if not tree:
+        return {"classified_error": "TREE_NOT_FOUND", "tree_id": tree_id}
+    if tree["status"] != PROPOSED:
+        return {"classified_error": "PLAN_NOT_PENDING",
+                "detail": f"tree is {tree['status']}, not PROPOSED",
+                "tree_id": tree_id}
+    safety.log_event(store, "plan_approved", actor=approved_by,
+                     detail=f"approved plan {tree_id[:8]}: {tree['goal'][:80]}")
+    return await execute_tree(tree_id, store)
+
+
+def reject_plan(tree_id: str, store: EvidenceStore,
+                rejected_by: str = "operator") -> dict:
+    """Cancel at the review gate — counted as a safety signal (checklist J:
+    rejected plans show where the AI's decomposition missed user intent)."""
+    tree = store.get_tree(tree_id)
+    if not tree:
+        return {"classified_error": "TREE_NOT_FOUND", "tree_id": tree_id}
+    safety.log_event(store, "plan_rejected", actor=rejected_by,
+                     detail=f"rejected plan {tree_id[:8]}: {tree['goal'][:80]}")
+    store.update_tree(tree_id, status="CANCELLED")
+    return {"tree_id": tree_id, "status": "CANCELLED",
+            "note": "Plan cancelled; nothing executed. Logged for the "
+                    "safety learning loop."}
+
+
+def halt_tree(tree_id: str, store: EvidenceStore,
+              halted_by: str = "operator") -> dict:
+    """v3.2 blocker E — Halt Execution. Sets the halt flag; the executor
+    drains cooperatively. In-flight tasks may complete — disclosed honestly
+    (never claim effects were undone)."""
+    tree = store.get_tree(tree_id)
+    if not tree:
+        return {"classified_error": "TREE_NOT_FOUND", "tree_id": tree_id}
+    store.request_halt(tree_id)
+    safety.log_event(store, "halt_requested", actor=halted_by,
+                     detail=f"halt requested on {tree_id[:8]}")
+    store.notify(kind="GOVERNANCE",
+                 title=f"Halt requested: tree {tree_id[:8]}",
+                 body=("A user requested halt. Tasks not yet started will be "
+                       "marked HALTED; any task already running completes "
+                       "and its results are marked accordingly."),
+                 ref=tree_id)
+    return {"tree_id": tree_id, "halt_requested": True,
+            "note": ("Stop signal sent to the swarm. Tasks not yet started "
+                     "will be marked HALTED; work already in flight completes "
+                     "and is marked as such (no false claims of rollback).")}
+
+
+async def run_goal(goal: str, store: EvidenceStore,
+                   context: dict | None = None) -> dict:
+    """One-shot free-text goal → executable task tree → UnifiedReport.
+    (Cortex dialogue path — conversation is the consent surface; use
+    propose_plan for the gated Ops Node flow, checklist D.)"""
+    plan = propose_plan(goal, store, context)
+    return await execute_tree(plan["tree_id"], store)
 
 
 async def resume_tree(tree_id: str, store: EvidenceStore) -> dict:
@@ -633,28 +830,8 @@ async def resume_tree(tree_id: str, store: EvidenceStore) -> dict:
     if not tree:
         return {"classified_error": "TREE_NOT_FOUND", "tree_id": tree_id}
     new_peer = MESH.primary["peer_id"]
-    store.update_tree(tree_id, peer_id=new_peer)
-    tasks = store.tasks_for_tree(tree_id)
-    for t in tasks:
-        t["params"] = {}  # persisted params aren't stored; re-derive below
-        t["_status_done"] = t["status"] in (COMPLETE, DEGRADED, BLOCKED,
-                                            AWAITING_HUMAN)
-    # re-derive params by re-decomposing the SAME goal (deterministic order),
-    # then remap cross-task references (uuid ids differ after reboot) from the
-    # fresh ids back onto the persisted task ids so results flow correctly.
-    fresh = decompose(tree["goal"])
-    id_map = {new["task_id"]: old["task_id"]
-              for old, new in zip(tasks, fresh)}
-    for old, new in zip(tasks, fresh):
-        params = dict(new.get("params", {}))
-        for k, v in list(params.items()):
-            if isinstance(v, str) and v in id_map:
-                params[k] = id_map[v]
-        old["params"] = params
-    results = await _run_levels(tree_id, tasks, store)
-    report = synthesize(tree["goal"], tasks, results)
-    store.update_tree(tree_id, status=report["tree_status"], report=report)
-    report["tree_id"] = tree_id
+    store.update_tree(tree_id, peer_id=new_peer, status=None)
+    report = await execute_tree(tree_id, store)
     report["resumed_by"] = new_peer
     report["failover_note"] = (f"Resumed by peer '{new_peer}' from persisted "
                                f"task state (§3.3 state-machine replication).")

@@ -201,7 +201,7 @@ export interface AnalyticsSummary {
 // ---------------- v3.0 SOVEREIGN FUSION (Ops Node, spec §2/§3/§6) ---------
 export type TaskStatus =
   | "PENDING" | "RUNNING" | "COMPLETE" | "DEGRADED" | "FAILED"
-  | "BLOCKED" | "AWAITING_HUMAN";
+  | "BLOCKED" | "AWAITING_HUMAN" | "HALTED";
 
 export interface OpsTask {
   task_id: string;
@@ -254,6 +254,10 @@ export interface UnifiedReport {
   tree_id: string;
   goal: string;
   peer_id: string;
+  // v3.2 safety-by-design
+  disclaimer?: string;
+  refusal?: { flag: string; message: string } | null;
+  halted?: boolean;
 }
 
 export interface CortexReply {
@@ -296,6 +300,7 @@ export interface OpsKpis {
   mesh_failovers: number;
   review_queue_depth: number;
   notifications_total: number;
+  safety_events?: Record<string, number>;   // v3.2 checklist J
   policy_version: string;
 }
 
@@ -331,4 +336,29 @@ export interface Prefs {
   output_format: string;
   consent: string;
   source: "defaults" | "stored";
+}
+
+// ---------------- v3.2 Safety-by-design (UX review blockers) ---------------
+export interface PlanProposal {
+  tree_id: string;
+  status: "PROPOSED";
+  goal: string;
+  peer_id: string;
+  plan: Array<{ agent: string; function: string; title: string; parent: boolean }>;
+  task_count: number;
+  ethics_flag: { flag: string; message: string } | null;
+  cost_warning: string | null;
+  disclaimer: string;
+  note: string;
+}
+
+export interface Incident {
+  incident_id: string;
+  severity: "SEV1" | "SEV2" | "SEV3";
+  summary: string;
+  declared_by: string;
+  status: "ACTIVE" | "RESOLVED";
+  delivery: { state: string; note?: string; channel?: string | null };
+  created_at: string;
+  checklist?: string[];
 }

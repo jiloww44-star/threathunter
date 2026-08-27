@@ -62,6 +62,28 @@ def get_prefs(user_id: str, db=Depends(get_db)):
     return personalization.get(db, user_id)
 
 
+@router.delete("/data/user/{user_id}")
+def delete_my_data(user_id: str, db=Depends(get_db)):
+    """v3.2 "Manage Data" exit ramp (review blocker E + risk #9, red-team
+    #12): erase the user's personal data with a clear, honest scope note.
+    Consent ledger stays intact by design — it IS the audit proof of
+    consent choices, holds only pseudonymous ids, and its retention is the
+    declared §5.3 policy; everything else about the user goes."""
+    counts = db.delete_user_artifacts(user_id)
+    db.audit(actor=user_id, action="safety_event:user_data_deleted",
+             decision="ALLOW",
+             detail=f"personal data deleted for {user_id}: {counts}",
+             policy_version="sovereign-policy/3.0.0")
+    return {"user_id": user_id, "deleted": True, **counts,
+            "scope": ["preferences", "watchlist_state", "journey_watches"],
+            "retained": [
+                "consent_ledger entries (§5.3 audit proof, pseudonymous)",
+                "system notifications (no personal content)",
+            ],
+            "cortex_note": ("Purge any live chat context separately: POST "
+                            "/api/v1/cortex/session/{id}/purge.")}
+
+
 @router.put("/prefs/{user_id}")
 def save_prefs(user_id: str, req: PrefsRequest, db=Depends(get_db)):
     """§3.4 + §5.3 — consent-gated write (CONSENT_REQUIRED when not granted)."""

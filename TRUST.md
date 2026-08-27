@@ -156,6 +156,15 @@ capability; the trust posture tightens accordingly:
    chain (`verify_chain()`), withdrawal is a new entry (history kept), and
    personalization writes are refused with classified `CONSENT_REQUIRED`
    unless the grant exists — nothing is stored silently.
+7. **Safety-by-design is load-bearing (v3.2, external UX review).** Users can
+   review any one-shot plan before it runs (Plan Review gate), halt running
+   work (`HALTED` states, honest "no rollback" claims), delete reports and
+   personal data, and declare real incidents (webhook delivery reported
+   honestly — `not_configured` beats cosmetic). AUDITOR refuses
+   private-individual OSINT targets and jailbreak phrasing pre-decomposition;
+   refusals are on the audit trail. The safety learning loop (halt/reject/
+   incident/ethics/masking counts) is exposed in KPIs so we measure where
+   humans push back on the machine. Full mapping: `design/Safety-Review-v3.2.md`.
 
 ---
 

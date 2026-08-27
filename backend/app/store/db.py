@@ -214,6 +214,18 @@ CREATE TABLE IF NOT EXISTS consent_ledger (     -- §5.3 immutable consent log
     created_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_consent_user ON consent_ledger(user_id, purpose);
+
+-- v3.2 Safety-by-design (UX review blockers E/G)
+CREATE TABLE IF NOT EXISTS declared_incidents (  -- functional crisis pathway
+    incident_id TEXT PRIMARY KEY,
+    severity TEXT,          -- SEV1 | SEV2 | SEV3
+    summary TEXT,
+    declared_by TEXT,
+    status TEXT DEFAULT 'ACTIVE',   -- ACTIVE | RESOLVED
+    delivery_json TEXT,     -- webhook delivery outcome (honest §20)
+    created_at TEXT,
+    resolved_at TEXT
+);
 """
 
 
@@ -262,6 +274,19 @@ class EvidenceStore:
                 "ALTER TABLE sources_meta ADD COLUMN health_note TEXT")
             self._conn.execute(
                 "ALTER TABLE sources_meta ADD COLUMN health_checked_at TEXT")
+        ot = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(ops_trees)")}
+        if "halt_requested" not in ot:
+            # v3.2 blocker E — user-controlled halt flag on running trees
+            self._conn.execute(
+                "ALTER TABLE ops_trees ADD COLUMN halt_requested "
+                "INTEGER DEFAULT 0")
+        jw = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(journey_watches)")}
+        if "user_id" not in jw:
+            # v3.2 — watches are personal data (deletable per user)
+            self._conn.execute(
+                "ALTER TABLE journey_watches ADD COLUMN user_id TEXT")
 
     def close(self):
         global _store
@@ -842,6 +867,84 @@ class EvidenceStore:
                 (limit,)).fetchall()
         return [dict(r) for r in rows]
 
+    # ---------------- v3.2 blocker E — user control / exit ramps ----------
+    def request_halt(self, tree_id: str):
+        with self._lock:
+            self._conn.execute(
+                "UPDATE ops_trees SET halt_requested=1, updated_at=? "
+                "WHERE tree_id=?", (_now(), tree_id))
+            self._conn.commit()
+
+    def is_halted(self, tree_id: str) -> bool:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT halt_requested FROM ops_trees WHERE tree_id=?",
+                (tree_id,)).fetchone()
+        return bool(r and r[0])
+
+    def delete_tree(self, tree_id: str):
+        """Exit ramp: permanently remove a tree + its tasks + report."""
+        with self._lock:
+            t = self._conn.execute(
+                "DELETE FROM ops_tasks WHERE tree_id=?", (tree_id,))
+            g = self._conn.execute(
+                "DELETE FROM ops_trees WHERE tree_id=?", (tree_id,))
+            self._conn.commit()
+        return {"tasks_deleted": t.rowcount, "tree_deleted": g.rowcount}
+
+    # ---------------- v3.2 blocker G — functional crisis pathway ----------
+    def declare_incident(self, incident_id: str, severity: str,
+                         summary: str, declared_by: str, delivery: dict):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO declared_incidents(incident_id, severity,
+                       summary, declared_by, delivery_json, created_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (incident_id, severity, summary, declared_by,
+                 json.dumps(delivery), _now()))
+            self._conn.commit()
+
+    def list_incidents(self, limit: int = 20) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM declared_incidents "
+                "ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["delivery"] = json.loads(d.get("delivery_json") or "{}")
+            d.pop("delivery_json", None)
+            out.append(d)
+        return out
+
+    def active_incident(self) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM declared_incidents WHERE status='ACTIVE' "
+                "ORDER BY created_at DESC LIMIT 1").fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        d["delivery"] = json.loads(d.get("delivery_json") or "{}")
+        d.pop("delivery_json", None)
+        return d
+
+    def resolve_incident(self, incident_id: str):
+        with self._lock:
+            self._conn.execute(
+                "UPDATE declared_incidents SET status='RESOLVED', "
+                "resolved_at=? WHERE incident_id=?", (_now(), incident_id))
+            self._conn.commit()
+
+    def safety_event_counts(self) -> dict[str, int]:
+        """v3.2 checklist J — the safety learning loop reads off the audit
+        trail (single source of truth, no shadow counters)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT action, COUNT(*) c FROM audit_trail "
+                "WHERE action LIKE 'safety_event:%' GROUP BY action").fetchall()
+        return {r["action"].split(":", 1)[1]: r["c"] for r in rows}
+
     # --------------------------------------- Trust Layer notifications ----
     def notify(self, kind: str, title: str, body: str, ref: str | None = None
                ) -> str:
@@ -938,15 +1041,17 @@ class EvidenceStore:
     # ------------------------------ VOYAGER journey watches (§5.1/P3) ----
     def add_watch(self, watch_id: str, origin: str, destination: str,
                   departure_time: str, baseline_risk: str,
-                  priority: str = "balanced", tolerance: str = "MODERATE"):
+                  priority: str = "balanced", tolerance: str = "MODERATE",
+                  user_id: str | None = None):
         with self._lock:
             self._conn.execute(
                 """INSERT INTO journey_watches(watch_id, origin, destination,
                        departure_time, priority, baseline_risk, current_risk,
-                       tolerance, created_at, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                       tolerance, user_id, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (watch_id, origin, destination, departure_time, priority,
-                 baseline_risk, baseline_risk, tolerance, _now(), _now()))
+                 baseline_risk, baseline_risk, tolerance, user_id,
+                 _now(), _now()))
             self._conn.commit()
 
     def get_watch(self, watch_id: str) -> dict | None:
@@ -1023,6 +1128,20 @@ class EvidenceStore:
                 "updated_at=? WHERE user_id=?",
                 (json.dumps(state), _now(), user_id))
             self._conn.commit()
+
+    def delete_user_artifacts(self, user_id: str) -> dict:
+        """v3.2 "Manage Data" exit ramp: erase a user's personal data.
+        Scope (documented): preferences + watchlist state + that user's
+        journey watches. The consent ledger is intentionally NOT touched —
+        it is the §5.3 tamper-evident audit record (pseudonymous ids)."""
+        with self._lock:
+            p = self._conn.execute(
+                "DELETE FROM user_preferences WHERE user_id=?", (user_id,))
+            w = self._conn.execute(
+                "DELETE FROM journey_watches WHERE user_id=?", (user_id,))
+            self._conn.commit()
+        return {"preferences_deleted": p.rowcount,
+                "watches_deleted": w.rowcount}
 
     def all_prefs(self) -> list[dict]:
         with self._lock:

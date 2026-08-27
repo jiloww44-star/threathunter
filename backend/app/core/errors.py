@@ -80,4 +80,19 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "Consent was not recorded",
         "Use a declared purpose and state 'granted' or 'withdrawn'",
     ),
+    "INCIDENT_NOT_FOUND": (  # v3.2 crisis pathway
+        "No active incident matches that id",
+        "The resolve action could not be completed",
+        "Check the active incident in the Ops Node",
+    ),
+    "INVALID_SEVERITY": (
+        "Incident severity must be SEV1, SEV2 or SEV3",
+        "The declaration was not recorded",
+        "Pick a declared severity level and retry",
+    ),
+    "PLAN_NOT_PENDING": (
+        "That plan is not waiting for approval",
+        "It may already be approved, cancelled or finished",
+        "Refresh the Strategy Map to see its current state",
+    ),
 }

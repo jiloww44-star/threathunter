@@ -174,3 +174,10 @@ def _public(s: dict) -> dict:
     return {k: v for k, v in s.items()
             if k in ("origin", "destination", "departure_hint", "intent",
                      "journey_context", "last_tree_id")}
+
+
+def purge_session(session_id: str) -> int:
+    """v3.2 Manage-Data exit ramp: delete conversational context NOW instead
+    of waiting for the 1h TTL (§25 minimization on demand)."""
+    s = _SESSIONS.pop(session_id, None)
+    return len([k for k in (s or {}) if s.get(k)])

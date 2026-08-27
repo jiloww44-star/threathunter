@@ -668,3 +668,76 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
   animation-duration: .01ms !important;
   transition-duration: .01ms !important;
 }
+
+/* ============ v3.2 Safety-by-design (UX review blockers E & G) =========== */
+.ai-disclaimer {
+  display: flex; align-items: flex-start; gap: 8px;
+  border: 1px solid #f59e0b66; border-left: 4px solid #f59e0b;
+  background: color-mix(in srgb, #f59e0b 7%, transparent);
+  border-radius: 8px; padding: 8px 12px;
+  font-size: .8rem; color: var(--color-text-dim);
+}
+
+.plan-review {
+  border: 1px solid var(--color-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent),
+    var(--shadow-2, 0 8px 24px rgba(0,0,0,.35));
+  margin-bottom: 14px;
+}
+
+.halt-btn {
+  margin-left: auto; min-height: 36px; padding: 6px 14px;
+  border-radius: 999px; border: 1px solid #ef4444;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #fca5a5; font: inherit; font-size: .8rem; font-weight: 700;
+  cursor: pointer;
+}
+.halt-btn:hover { background: color-mix(in srgb, #ef4444 22%, transparent); }
+
+.crisis-btn {
+  min-height: var(--touch-min, 44px); padding: 8px 14px; border-radius: 10px;
+  border: 1px solid #ef4444; background: transparent;
+  color: #fca5a5; font: inherit; font-size: .85rem; cursor: pointer;
+}
+.crisis-btn:hover { background: color-mix(in srgb, #ef4444 10%, transparent); }
+
+.crisis-banner { border: 1px solid #ef4444; border-left-width: 5px; }
+.crisis-checklist { margin: 8px 0; padding-left: 20px; font-size: .85rem; }
+.crisis-checklist li { margin: 3px 0; }
+
+.crisis-modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(5, 8, 14, .7);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.crisis-modal { width: min(560px, 100%); border-left: 5px solid #ef4444; }
+.crisis-modal textarea {
+  width: 100%; min-height: 96px; resize: vertical;
+  background: var(--color-surface-2, rgba(255,255,255,.035));
+  border: 1px solid var(--color-border, #2a3a4d); border-radius: 10px;
+  color: var(--color-text); font: inherit; padding: 10px 12px;
+}
+
+.onboarding-banner {
+  border: 1px solid var(--color-evidence);
+  border-left-width: 5px; margin-bottom: 16px;
+}
+
+.task-io { width: 100%; margin-top: 4px; font-size: .72rem; }
+.task-io summary { cursor: pointer; color: var(--color-text-dim); }
+.task-io pre {
+  max-height: 220px; overflow: auto; margin: 6px 0 0;
+  background: rgba(0,0,0,.25); border-radius: 8px; padding: 8px;
+  font-size: .68rem;
+}
+.task-agent { cursor: help; text-decoration: underline dotted;
+  text-underline-offset: 3px; }
+
+.tree-delete {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  font-size: .85rem; opacity: .55; padding: 2px 6px; min-height: 0;
+}
+.tree-delete:hover, .tree-delete:focus-visible { opacity: 1; }
+
+.task-item.st-halted { border-left-color: #64748b; opacity: .75; }

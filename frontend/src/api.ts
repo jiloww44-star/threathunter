@@ -1,9 +1,9 @@
 // API client — relative paths only; the Vite dev proxy forwards /api → :8000
 import type {
   AgentInfo, AnalyticsSummary, ConsentLedgerView, ConsentStateView,
-  CortexReply, FactCheckResponse, GraphData, JourneyResponse, KYCResponse,
-  KYCFixture, MeshStatus, OpsKpis, OpsNotification, Prefs, RecentCheck,
-  Statistics, StrategyMap, TreeSummary, UnifiedReport,
+  CortexReply, FactCheckResponse, GraphData, Incident, JourneyResponse,
+  KYCResponse, KYCFixture, MeshStatus, OpsKpis, OpsNotification, PlanProposal,
+  Prefs, RecentCheck, Statistics, StrategyMap, TreeSummary, UnifiedReport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -112,6 +112,44 @@ export const api = {
     request<Prefs>(`/api/v1/prefs/${userId}`, {
       method: "PUT",
       body: JSON.stringify(patch),
+    }),
+
+  // ---- v3.2 safety-by-design: plan gate, halt, crisis, data ramps ----
+  planGoal: (goal: string) =>
+    request<PlanProposal>("/api/v1/ops/plan", {
+      method: "POST",
+      body: JSON.stringify({ goal }),
+    }),
+  approveTree: (treeId: string) =>
+    request<UnifiedReport>(`/api/v1/ops/tree/${treeId}/approve`, {
+      method: "POST",
+    }),
+  rejectTree: (treeId: string) =>
+    request<{ status: string }>(`/api/v1/ops/tree/${treeId}/reject`, {
+      method: "POST",
+    }),
+  haltTree: (treeId: string) =>
+    request<{ note: string }>(`/api/v1/ops/tree/${treeId}/halt`, {
+      method: "POST",
+    }),
+  deleteTree: (treeId: string) =>
+    request<{ deleted: boolean }>(`/api/v1/ops/tree/${treeId}`, {
+      method: "DELETE",
+    }),
+  declareIncident: (severity: string, summary: string, declaredBy: string) =>
+    request<Incident>("/api/v1/ops/incident/declare", {
+      method: "POST",
+      body: JSON.stringify({ severity, summary, declared_by: declaredBy }),
+    }),
+  activeIncident: () =>
+    request<{ incident: Incident | null }>("/api/v1/ops/incident/active"),
+  resolveIncident: (incidentId: string) =>
+    request<{ status: string }>(`/api/v1/ops/incident/${incidentId}/resolve`, {
+      method: "POST",
+    }),
+  deleteUserData: (userId: string) =>
+    request<{ deleted: boolean }>(`/api/v1/data/user/${userId}`, {
+      method: "DELETE",
     }),
 };
 

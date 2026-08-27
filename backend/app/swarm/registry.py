@@ -81,9 +81,11 @@ NATIVE_AGENTS: dict[str, AgentSpec] = {
                      "trail (A-06). Runs as non-blocking parallel overlay on "
                      "every tree (v2 C-07)."),
         api_functions=["mask_pii", "screen_entity", "authorize_action",
-                       "compliance_overlay", "validate_custom_agent"],
+                       "compliance_overlay", "validate_custom_agent",
+                       "sensitive_target_check"],
         read_only_functions=["mask_pii", "screen_entity",
-                             "validate_custom_agent"]),
+                             "validate_custom_agent",
+                             "sensitive_target_check"]),
 }
 
 # §5.2 — sovereign policy version applies to native and SDK agents alike.

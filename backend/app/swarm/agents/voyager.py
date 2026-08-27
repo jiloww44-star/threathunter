@@ -84,7 +84,8 @@ def monitor_active_journey(store: EvidenceStore, *, origin: str,
                            destination: str,
                            departure_time: datetime | None,
                            priority: str = "balanced",
-                           tolerance: str = "MODERATE") -> dict:
+                           tolerance: str = "MODERATE",
+                           user_id: str | None = None) -> dict:
     """§5.1 row 5 / §8 P3 — enrol a journey for live reassessment.
 
     Baseline risk is computed NOW; the Trust Layer's continual reassessment
@@ -101,7 +102,8 @@ def monitor_active_journey(store: EvidenceStore, *, origin: str,
     watch_id = str(uuid.uuid4())
     store.add_watch(watch_id, origin, destination,
                     (departure_time or datetime.now(timezone.utc)).isoformat(),
-                    baseline, priority=priority, tolerance=tolerance)
+                    baseline, priority=priority, tolerance=tolerance,
+                    user_id=user_id)
     store.audit(actor="VOYAGER", action="enroll_journey_watch",
                 decision="ALLOW",
                 detail=f"{origin} → {destination} baseline={baseline}",

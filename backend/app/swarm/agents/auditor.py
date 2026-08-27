@@ -34,6 +34,8 @@ _POLICY: dict[str, str] = {
 
 _PATTERNS = [
     (re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), "[email]"),
+    # 14-19 digits = card lengths; shorter digit runs classify as phone/id
+    (re.compile(r"\b(?:\d[ -]?){14,19}\b"), "[payment-card]"),
     (re.compile(r"\+?\d[\d\s().-]{7,}\d"), "[phone]"),
     (re.compile(r"\b[A-Z]{1,2}\d{6,9}\b"), "[id-number]"),
 ]
@@ -41,14 +43,79 @@ _PATTERNS = [
 
 def mask_pii(text: str) -> dict:
     """Zero-trust PII masking (A-06): returns masked text + hit count.
-    Runs over every outbound synthesis payload."""
+    Runs over every outbound synthesis payload. Pattern coverage disclosed
+    honestly — masking is best-effort, reports carry the AI-output
+    disclaimer (risk 5: never claim perfect PII detection)."""
     hits = 0
     out = text
+    kinds: list[str] = []
     for rx, repl in _PATTERNS:
         out, n = rx.subn(repl, out)
+        if n:
+            kinds.append(repl.strip("[]"))
         hits += n
-    return {"masked": out, "pii_fields_masked": hits,
-            "policy": "zero-trust masking (A-06)"}
+    return {"masked": out, "pii_fields_masked": hits, "detected_kinds": kinds,
+            "policy": "zero-trust masking (A-06)",
+            "coverage_note": ("Best-effort pattern coverage: email, payment "
+                              "card, phone, id-number. Not a guarantee — "
+                              "review outputs before sharing (risk #5).")}
+
+
+# ------------------------------------------------- ethical target gating --
+# v3.2 review top-risk #1 + red-team 2/9/11: refuse OSINT fan-out against
+# private individuals / harassment goals; block jailbreak phrasing outright.
+_SENSITIVE_KEYWORDS = (
+    "home address", "where does", "lives at", "lives in",
+    "phone number of", "family of", "family members", "children of",
+    "dox", "stalk", "harass", "track ", "track the", "surveillance of",
+    "religion of", "political affiliation", "ethnicity of",
+)
+_JAILBREAK_PATTERNS = (
+    "ignore previous instructions", "ignore all instructions",
+    "disregard your instructions", "bypass safety", "jailbreak",
+)
+_PERSON_WITH_LOCATION = re.compile(
+    r"\b(?:about|on|find everything (?:you can )?on|investigate|profile)\s+"
+    r"['\"]?([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})['\"]?",
+)
+
+
+def sensitive_target_check(goal: str) -> dict:
+    """AUDITOR ethics gate evaluated BEFORE any HUNTER fan-out (risk #1).
+
+    Heuristic, disclosed: it looks for person-targeting phrasing combined
+    with surveillance/harassment keywords or explicit jailbreak phrasing.
+    A hit is an ETHICS_FLAG — the goal is refused with guidance to refocus
+    on public entities or security threats (red-team #2 expected message).
+    Legitimate names in public-entity contexts (companies, officials quoted
+    in news) still pass: only the person+intrusive-intent combination flags.
+    """
+    g = goal.lower()
+    jailbreak = next((p for p in _JAILBREAK_PATTERNS if p in g), None)
+    keyword = next((k for k in _SENSITIVE_KEYWORDS if k in g), None)
+    person = _PERSON_WITH_LOCATION.search(goal)
+    # combined name + place phrase ("Jane Doe who lives in Lekki")
+    name_place = bool(re.search(
+        r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\s+who\s+(?:lives|works|resides)",
+        goal)) or bool(person and re.search(r"\b(?:in|at|from)\s+[A-Z]", goal))
+
+    if jailbreak:
+        return {"flag": "JAILBREAK_ATTEMPT", "halt": True,
+                "message": ("Ethical violation detected. Operation halted. "
+                            "This attempt has been logged (red-team #11).")}
+    if keyword and (person or name_place or "find" in g or "everything" in g):
+        return {"flag": "SENSITIVE_TARGET", "halt": True,
+                "message": ("This query has been flagged for targeting a "
+                            "private individual. Refocus your query on "
+                            "public entities or security threats — OSINT "
+                            "fan-out against private persons is refused "
+                            "(risk #1 weaponized-OSINT guard).")}
+    if keyword:
+        return {"flag": "SENSITIVE_KEYWORD", "halt": False,
+                "message": ("Query contains privacy-sensitive terms; "
+                            "proceeding with AUDITOR overlay escalated to "
+                            "review logging.")}
+    return {"flag": None, "halt": False, "message": ""}
 
 
 async def screen_entity(store: EvidenceStore, name: str) -> dict:

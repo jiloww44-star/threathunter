@@ -5,8 +5,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import type {
-  AgentInfo, CortexReply, MeshStatus, OpsKpis, OpsNotification,
-  RecentCheck, StrategyMap, TaskStatus, UnifiedReport,
+  AgentInfo, CortexReply, Incident, MeshStatus, OpsKpis,
+  OpsNotification, PlanProposal, RecentCheck, StrategyMap, TaskStatus,
+  UnifiedReport,
 } from "../types";
 import { ConfidenceMeter, ErrorPanel, TrustTag } from "../components/shared";
 
@@ -16,9 +17,12 @@ const STATUS_META: Record<TaskStatus, { icon: string; label: string }> = {
   FAILED: { icon: "✕", label: "failed" },
   BLOCKED: { icon: "⛔", label: "blocked by governance" },
   AWAITING_HUMAN: { icon: "⏸", label: "awaiting human" },
+  HALTED: { icon: "■", label: "halted by user" },
   RUNNING: { icon: "…", label: "running" },
   PENDING: { icon: "·", label: "pending" },
 };
+
+const ONBOARD_KEY = "th360.onboarded";
 
 interface ChatMsg {
   role: "user" | "cortex";
@@ -58,15 +62,24 @@ export function OpsNode() {
   const [kpis, setKpis] = useState<OpsKpis | null>(null);
   const [pane, setPane] = useState<Pane>("strategy");
   const chatEnd = useRef<HTMLDivElement>(null);
+  // v3.2 safety-by-design state
+  const [plan, setPlan] = useState<PlanProposal | null>(null);
+  const [incident, setIncident] = useState<Incident | null>(null);
+  const [crisisOpen, setCrisisOpen] = useState(false);
+  const [sev, setSev] = useState("SEV2");
+  const [sevSummary, setSevSummary] = useState("");
+  const [onboarded, setOnboarded] = useState(
+    () => localStorage.getItem(ONBOARD_KEY) === "1");
 
   const refreshPanels = useCallback(async () => {
-    const [m, a, n, k, f, tl] = await Promise.all([
+    const [m, a, n, k, f, tl, inc] = await Promise.all([
       api.opsMesh().catch(() => null),
       api.opsAgents().catch(() => null),
       api.opsNotifications().catch(() => null),
       api.opsKpis().catch(() => null),
       api.recent().catch(() => null),
       api.opsTrees().catch(() => null),
+      api.activeIncident().catch(() => null),
     ]);
     if (m) setMesh(m);
     if (a) setAgents(a.agents);
@@ -74,6 +87,7 @@ export function OpsNode() {
     if (k) setKpis(k);
     if (f) setFeed(f);
     if (tl) setTreeList(tl);
+    if (inc) setIncident(inc.incident);
   }, []);
 
   useEffect(() => { refreshPanels(); }, [refreshPanels]);
@@ -109,13 +123,31 @@ export function OpsNode() {
     }
   };
 
+  // v3.2 checklist D — one-shot goals go through the Plan Review gate:
+  // decompose → user approves → execute. Nothing runs before approval.
   const fireGoal = async (goal: string) => {
     if (busy) return;
     setBusy(true);
     setError(null);
-    setMessages((m) => [...m, { role: "user", text: `⚡ ${goal}` }]);
     try {
-      const r = await api.opsGoal(goal);
+      const p = await api.planGoal(goal);
+      setPlan(p);
+      setPane("strategy");
+    } catch (e) {
+      setError(e as ApiError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const approvePlan = async () => {
+    if (!plan) return;
+    setBusy(true);
+    setError(null);
+    setMessages((m) => [...m, { role: "user", text: `⚡ ${plan.goal}` }]);
+    try {
+      const r = await api.approveTree(plan.tree_id);
+      setPlan(null);
       setReport(r);
       await loadTree(r.tree_id);
       setMessages((m) => [...m, {
@@ -129,6 +161,44 @@ export function OpsNode() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const rejectPlan = async () => {
+    if (!plan) return;
+    await api.rejectTree(plan.tree_id).catch(() => {});
+    setPlan(null);
+    refreshPanels();
+  };
+
+  // v3.2 blocker E — Halt Execution for the currently selected tree
+  const haltCurrentTree = async () => {
+    if (!tree) return;
+    await api.haltTree(tree.tree_id).catch(() => {});
+    await loadTree(tree.tree_id);
+    refreshPanels();
+  };
+
+  const declareCrisis = async () => {
+    setBusy(true);
+    try {
+      const inc = await api.declareIncident(
+        sev, sevSummary, localStorage.getItem("th360.user") || "demo-operator");
+      setIncident(inc);
+      setCrisisOpen(false);
+      setSevSummary("");
+      refreshPanels();
+    } catch (e) {
+      setError(e as ApiError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resolveCrisis = async () => {
+    if (!incident) return;
+    await api.resolveIncident(incident.incident_id).catch(() => {});
+    setIncident(null);
+    refreshPanels();
   };
 
   const runReassess = async () => {
@@ -156,6 +226,58 @@ export function OpsNode() {
           command: external-effect actions always pause for approval (§27).
         </p>
       </header>
+
+      {/* v3.2 trust calibration — first-run "AI Partnership" (checklist B) */}
+      {!onboarded && (
+        <div className="card onboarding-banner" role="note"
+             aria-label="AI partnership notice">
+          <h3 style={{ marginTop: 0 }}>🤝 AI Partnership — read once</h3>
+          <p>
+            <strong>Welcome to the ThreatHunter360 Ops Node.</strong> This is
+            an AI-powered <em>assistant</em> for threat intelligence and
+            security operations: you define a goal, the governed agent swarm
+            helps you build and execute a plan.
+          </p>
+          <p>
+            <strong>It is not an oracle.</strong> The AI can be wrong or
+            incomplete — verify all AI-generated insights and plans with your
+            team's protocols before taking action. You stay in command:
+            plans can be reviewed before execution, halted mid-run, and every
+            destructive action waits for human approval.
+          </p>
+          <button className="btn" type="button"
+                  onClick={() => {
+                    localStorage.setItem(ONBOARD_KEY, "1");
+                    setOnboarded(true);
+                  }}>
+            Understood — I'll verify before acting
+          </button>
+        </div>
+      )}
+
+      {/* v3.2 blocker G — functional crisis banner (simplifies, never
+          accelerates: review risk #10) */}
+      {incident && (
+        <div className="card crisis-banner" role="alert">
+          <h3 style={{ marginTop: 0 }}>
+            🚨 ACTIVE INCIDENT · {incident.severity}
+          </h3>
+          <p style={{ margin: "4px 0" }}>{incident.summary}</p>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0" }}>
+            Declared by {incident.declared_by} · external delivery:{" "}
+            <strong>{incident.delivery?.state}</strong>
+            {incident.delivery?.note ? ` — ${incident.delivery.note}` : ""}
+          </p>
+          {incident.checklist && (
+            <ol className="crisis-checklist">
+              {incident.checklist.map((c, i) => <li key={i}>{c}</li>)}
+            </ol>
+          )}
+          <button className="demo-btn" type="button" onClick={resolveCrisis}>
+            Mark resolved
+          </button>
+        </div>
+      )}
 
       {/* mesh strip (§3.3) */}
       {mesh && (
@@ -230,8 +352,9 @@ export function OpsNode() {
           </form>
           <div className="btn-row">
             <button type="button" className="demo-btn" disabled={busy}
-                    onClick={() => fireGoal("Secure the Lagos IoT deployment — scan for vulnerabilities")}>
-              ⚡ Demo: security sweep
+                    onClick={() => fireGoal("Secure the Lagos IoT deployment — scan for vulnerabilities")}
+                    title="Decomposes first — you approve the plan before anything runs">
+              ⚡ Demo: security sweep (plan first)
             </button>
             <button type="button" className="demo-btn" disabled={busy}
                     onClick={() => send("I'm traveling tomorrow")}>
@@ -241,11 +364,59 @@ export function OpsNode() {
                     onClick={runReassess} title="§1.10 continual reassessment">
               ↻ Reassess now
             </button>
+            <button type="button" className="crisis-btn"
+                    onClick={() => setCrisisOpen(true)}>
+              🚨 Declare incident
+            </button>
           </div>
         </div>
 
         {/* ------------------- right pane: tabs ------------------- */}
         <div className="ops-side">
+          {/* v3.2 checklist D — Plan Review gate (choice & autonomy) */}
+          {plan && (
+            <div className="card plan-review" role="dialog"
+                 aria-label="Plan review — approve before execution">
+              <h3 style={{ marginTop: 0 }}>
+                📋 Review &amp; Approve Plan
+                <span className="badge moderate" style={{ marginLeft: 8 }}>
+                  {plan.task_count} tasks · nothing has run yet
+                </span>
+              </h3>
+              <p style={{ fontWeight: 600 }}>{plan.goal}</p>
+              {plan.ethics_flag && (
+                <p className="review-route" role="alert">
+                  ⛔ Ethics flag: {plan.ethics_flag.message}
+                </p>
+              )}
+              {plan.cost_warning && (
+                <p className="review-route" role="alert">
+                  ⚠ {plan.cost_warning}
+                </p>
+              )}
+              <ol className="strategy-tree">
+                {plan.plan.map((t, i) => (
+                  <li key={i} className="task-item"
+                      style={{ marginLeft: t.parent ? 22 : 0 }}>
+                    <span className="task-agent">{t.agent}</span>
+                    <span className="task-title">{t.title}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="ai-disclaimer" role="note">
+                ⚠ {plan.disclaimer}
+              </p>
+              <div className="btn-row">
+                <button className="btn" type="button" disabled={busy}
+                        onClick={approvePlan}>
+                  Approve &amp; Execute
+                </button>
+                <button className="demo-btn" type="button" onClick={rejectPlan}>
+                  Cancel plan
+                </button>
+              </div>
+            </div>
+          )}
           <nav className="pane-tabs" aria-label="Ops panes">
             {(["strategy", "timeline", "alerts", "feed", "kpis"] as Pane[]).map((p) => (
               <button key={p} type="button"
@@ -264,7 +435,16 @@ export function OpsNode() {
             <div className="card" aria-label="Strategy Map">
               {tree ? (
                 <>
-                  <h3 style={{ marginTop: 0 }}>🗺 Strategy Map</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <h3 style={{ marginTop: 0 }}>🗺 Strategy Map</h3>
+                    {tree.tasks.some((t) =>
+                      t.status === "PENDING" || t.status === "RUNNING") && (
+                      <button type="button" className="halt-btn"
+                              onClick={haltCurrentTree}>
+                        ■ Halt Execution
+                      </button>
+                    )}
+                  </div>
                   <p className="muted" style={{ marginTop: 0 }}>
                     <span className="mono">{tree.tree_id}</span> · peer{" "}
                     <span className="mono">{tree.peer_id}</span> · status{" "}
@@ -274,6 +454,11 @@ export function OpsNode() {
                   <ol className="strategy-tree">
                     {tree.tasks.map((t) => {
                       const meta = STATUS_META[t.status] ?? STATUS_META.PENDING;
+                      const agentDesc = agents.find(
+                        (a) => a.agent_id === t.agent)?.description
+                        ?? `${t.agent} agent`;
+                      const hasResult = t.result &&
+                        Object.keys(t.result).length > 0;
                       return (
                         <li key={t.task_id}
                             className={`task-item st-${t.status.toLowerCase()}`}
@@ -283,12 +468,24 @@ export function OpsNode() {
                           <span className="task-icon" aria-hidden="true">
                             {meta.icon}
                           </span>
-                          <span className="task-agent">{t.agent}</span>
+                          {/* risk #8 black-box fix: role tooltip on agents */}
+                          <span className="task-agent" title={agentDesc}>
+                            {t.agent}
+                          </span>
                           <span className="task-title">{t.title}</span>
                           <span className="task-status">{meta.label}
                             {t.classified_error
                               ? ` · ${t.classified_error}` : ""}
                           </span>
+                          {/* interactive (flow #5): raw task I/O on demand */}
+                          {hasResult && (
+                            <details className="task-io">
+                              <summary>raw result</summary>
+                              <pre className="mono">
+                                {JSON.stringify(t.result, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                         </li>
                       );
                     })}
@@ -316,6 +513,19 @@ export function OpsNode() {
                     <strong>{t.status}</strong>
                     <span className="badge moderate">{
                       t.peer_id}</span>
+                    {/* risk #9 — reports are deletable (Data sovereignty) */}
+                    <button type="button" className="tree-delete"
+                            aria-label={`Delete report ${t.tree_id.slice(0, 8)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(
+                                "Delete this report and all its task records "
+                                + "permanently?")) {
+                                api.deleteTree(t.tree_id).then(refreshPanels);
+                              }
+                            }}>
+                      🗑
+                    </button>
                     <p className="why">{t.goal}</p>
                   </li>
                 ))}
@@ -417,6 +627,24 @@ export function OpsNode() {
                 {Object.entries(kpis.task_status_mix)
                   .map(([k, v]) => `${k}=${v}`).join("  ")}
               </p>
+              {/* v3.2 checklist J — the safety learning loop, visible */}
+              <h4>Safety events (learning loop)</h4>
+              {kpis.safety_events &&
+              Object.keys(kpis.safety_events).length > 0 ? (
+                <ul className="muted" style={{ fontSize: ".82rem" }}>
+                  {Object.entries(kpis.safety_events).map(([k, v]) => (
+                    <li key={k}>
+                      {k.replace(/_/g, " ")}: <strong>{v}×</strong>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted" style={{ fontSize: ".82rem" }}>
+                  No safety events yet — halts, plan rejections, incidents and
+                  masking hits are counted here so we learn where users push
+                  back on the AI.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -429,6 +657,23 @@ export function OpsNode() {
             <h2 style={{ margin: 0, fontSize: "1.15rem" }}>Unified Report</h2>
             <ConfidenceMeter level={report.confidence} />
           </header>
+          {/* v3.2 flow #4 — explicit AI-output disclaimer on every report */}
+          <p className="ai-disclaimer" role="note">
+            ⚠ {report.disclaimer ?? "AI-generated output — verify all "
+              + "findings and recommendations with your team's protocols "
+              + "before taking action."}
+          </p>
+          {report.refusal && (
+            <p className="review-route" role="alert">
+              ⛔ {report.refusal.message}
+            </p>
+          )}
+          {report.halted && (
+            <p className="review-route" role="status">
+              ■ This execution was halted by the user — results are partial
+              and marked as such.
+            </p>
+          )}
           <p className="answer">{report.answer}</p>
           <p className="interpretation">
             <TrustTag kind="INFERENCE" />
@@ -523,6 +768,51 @@ export function OpsNode() {
           ))}
         </div>
       </details>
+      {/* v3.2 blocker G — functional Incident Declaration modal (flow #3) */}
+      {crisisOpen && (
+        <div className="crisis-modal-overlay" role="presentation"
+             onClick={(e) => {
+               if (e.target === e.currentTarget) setCrisisOpen(false);
+             }}>
+          <div className="card crisis-modal" role="dialog"
+               aria-modal="true" aria-labelledby="crisis-title">
+            <h3 id="crisis-title" style={{ marginTop: 0 }}>
+              🚨 Incident Declaration
+            </h3>
+            <p className="muted" style={{ fontSize: ".85rem" }}>
+              This records the incident, notifies the operations channel
+              (webhook when configured), and opens the response checklist —
+              it does <em>not</em> just change colors.
+            </p>
+            <div className="field">
+              <label htmlFor="sev">Severity</label>
+              <select id="sev" value={sev}
+                      onChange={(e) => setSev(e.target.value)}>
+                <option value="SEV1">SEV-1 — critical, active breach/outage</option>
+                <option value="SEV2">SEV2 — major, contained but serious</option>
+                <option value="SEV3">SEV3 — minor, watch closely</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="sev-summary">Incident summary</label>
+              <textarea id="sev-summary" rows={4} value={sevSummary}
+                        placeholder="What happened, what systems, what do you know so far?"
+                        onChange={(e) => setSevSummary(e.target.value)} />
+            </div>
+            <div className="btn-row">
+              <button className="btn" type="button"
+                      disabled={busy || sevSummary.trim().length < 5}
+                      onClick={declareCrisis}>
+                Declare &amp; notify on-call
+              </button>
+              <button className="demo-btn" type="button"
+                      onClick={() => setCrisisOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

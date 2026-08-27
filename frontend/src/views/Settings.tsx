@@ -264,6 +264,39 @@ export function Settings() {
             honored automatically across every view.
           </p>
         </div>
+
+        {/* ------------- v3.2 Data & Sessions (review blocker E) ------ */}
+        <div className="card" aria-label="Data and sessions">
+          <h3 style={{ marginTop: 0 }}>🗂 Data &amp; sessions</h3>
+          <p className="muted" style={{ fontSize: ".82rem" }}>
+            Your watchlists, preferences and journey watches are personal
+            data — delete them here, permanently. Generated reports can be
+            deleted individually in the Ops Node timeline. The consent ledger
+            is retained by design: it is the §5.3 audit proof of your
+            choices and holds only your pseudonymous id.
+          </p>
+          {savedNote && <p className="muted" role="status">{savedNote}</p>}
+          <div className="btn-row">
+            <button type="button" className="demo-btn"
+                    style={{ color: "#ef4444", borderColor: "#ef4444" }}
+                    onClick={async () => {
+                      if (!window.confirm(
+                        `Permanently delete preferences, watchlists and `
+                        + `journey watches for "${userId}"?`)) return;
+                      try {
+                        await api.deleteUserData(userId);
+                        setSavedNote(
+                          "Personal data deleted — consent ledger retained "
+                          + "as audit proof (declared policy).");
+                        await load(userId);
+                      } catch (e) {
+                        setError(e as ApiError);
+                      }
+                    }}>
+              Delete my data
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

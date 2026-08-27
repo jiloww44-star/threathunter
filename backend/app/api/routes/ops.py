@@ -76,7 +76,13 @@ async def declare_incident(req: IncidentRequest, db=Depends(get_db)):
 async def active_incident(db=Depends(get_db)):
     """Powers the crisis-mode banner: UI simplifies while an incident is
     ACTIVE (checklist shown, motion reduced — review risk #10)."""
-    return {"incident": db.active_incident()}
+    inc = db.active_incident()
+    if inc:
+        # v3.5 — the checklist + guidance travel WITH the active state so the
+        # banner/restored sessions render identically to the declare response
+        inc = {**inc, "checklist": incident.RESPONSE_CHECKLIST,
+               "ui_guidance": incident.UI_GUIDANCE}
+    return {"incident": inc}
 
 
 @router.get("/ops/incidents")

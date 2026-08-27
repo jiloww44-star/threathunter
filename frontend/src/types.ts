@@ -377,6 +377,8 @@ export interface Incident {
   delivery: { state: string; note?: string; channel?: string | null };
   created_at: string;
   checklist?: string[];
+  /** v3.5 risk #10 — honest guidance that rides with the active state. */
+  ui_guidance?: string;
 }
 
 /* v3.3 — SOVEREIGN OPS NODE (blueprint v5.2) */

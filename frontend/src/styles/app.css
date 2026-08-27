@@ -909,3 +909,48 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
 }
 .consent-origin.region { border-color: var(--color-accent-2-bright);
                          color: var(--color-accent-2-bright); }
+
+/* ==========================================================================
+   v3.5 — crisis-focus mode (red-team review #10)
+   An ACTIVE incident SIMPLIFIES the interface: non-essential panes hide,
+   motion is suppressed, non-crisis cards dim — the checklist and the stream
+   stay readable. The interface never accelerates feeds or cranks red for
+   its own sake.
+   ========================================================================== */
+.crisis-active .card:not(.crisis-banner):not(:has(.crisis-btn)) {
+  opacity: 0.72;
+}
+.crisis-active .card:focus-within,
+.crisis-active .card:hover { opacity: 1; }
+.crisis-active *, .crisis-active *::before, .crisis-active *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.05s !important;
+}
+
+.crisis-progress { color: var(--color-accent); margin: 6px 0 2px; }
+.crisis-checklist.interactive {
+  list-style: none;
+  padding-left: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+.crisis-checklist.interactive label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.crisis-checklist.interactive input[type="checkbox"] {
+  margin-top: 3px;
+  accent-color: var(--color-accent);
+  width: 15px;
+  height: 15px;
+}
+.crisis-checklist.interactive span.done {
+  color: var(--color-text-faint);
+  text-decoration: line-through;
+}

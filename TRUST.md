@@ -121,6 +121,19 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 8. v3.5 Crisis-focus addendum
+
+- **Crisis-focus UI — blast radius: LOW-MEDIUM, review D2.** Simplifying
+  during crisis must not *hide* dismissed-but-relevant context. Mitigations:
+  only the pane set is reduced (no data deleted — full tabs return on
+  resolve); the checklist is interactive but guidance-only and says so;
+  motion suppression is a comfort feature, never a signal amplifier (no
+  feed acceleration, in line with the review's risk #10 language).
+- **Field manual drills (#1) — blast radius: LOW, review D1.** Training
+  content uses only seed fixtures; drills are self-judged (no platform
+  scoring that could itself be gamed), and each names the honest behavior
+  the operator should recognize so the drill teaches what to distrust.
+
 ## 7. v3.4 Red-team hardening addendum
 
 - **Cortex crisis detection — blast radius: MEDIUM, review D2.** A false

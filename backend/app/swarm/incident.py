@@ -28,6 +28,13 @@ RESPONSE_CHECKLIST = [
     "Do not execute AI-suggested remediation without human review.",
 ]
 
+# Guidance surfaced wherever crisis mode renders (declare response AND the
+# active-incident poll, so restored sessions see the same contract).
+UI_GUIDANCE = ("Crisis mode simplifies the interface — essential checklist "
+               "only, reduced motion, no feed acceleration (review risk "
+               "#10). This checklist is guidance, not a substitute for your "
+               "team's runbook.")
+
 
 async def declare(store: EvidenceStore, *, severity: str, summary: str,
                   declared_by: str) -> dict:
@@ -79,7 +86,5 @@ async def declare(store: EvidenceStore, *, severity: str, summary: str,
         "status": "ACTIVE", "declared_by": declared_by,
         "delivery": delivery,
         "checklist": RESPONSE_CHECKLIST,
-        "ui_guidance": ("Crisis mode simplifies the interface — essential "
-                        "checklist only, reduced motion, no feed "
-                        "acceleration (review risk #10)."),
+        "ui_guidance": UI_GUIDANCE,
     }

@@ -65,6 +65,33 @@ export function OpsNode() {
   // v3.2 safety-by-design state
   const [plan, setPlan] = useState<PlanProposal | null>(null);
   const [incident, setIncident] = useState<Incident | null>(null);
+  // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
+  const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!incident) { setCheckedSteps({}); return; }
+    try {
+      const raw = localStorage.getItem(
+        `th360.checklist.${incident.incident_id}`);
+      setCheckedSteps(raw ? JSON.parse(raw) : {});
+    } catch { setCheckedSteps({}); }
+  }, [incident?.incident_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleStep = (idx: number) => {
+    if (!incident) return;
+    const next = { ...checkedSteps, [idx]: !checkedSteps[idx] };
+    setCheckedSteps(next);
+    try {
+      localStorage.setItem(`th360.checklist.${incident.incident_id}`,
+                           JSON.stringify(next));
+    } catch { /* storage unavailable — state stays in-memory */ }
+  };
+
+  // v3.5 risk #10 — crisis SIMPLIFIES the interface: only essential panes
+  const crisisPanes: Pane[] = ["stream", "alerts"];
+  useEffect(() => {
+    if (incident && !crisisPanes.includes(pane)) setPane("stream");
+  }, [incident]); // eslint-disable-line react-hooks/exhaustive-deps
   const [crisisOpen, setCrisisOpen] = useState(false);
   const [crisisSignal, setCrisisSignal] = useState<
     { phrase: string; action: string } | null>(null);  // v3.4 red-team #3
@@ -223,7 +250,8 @@ export function OpsNode() {
   const activeTrees = treeList?.trees ?? [];
 
   return (
-    <section aria-labelledby="ops-title">
+    <section aria-labelledby="ops-title"
+             className={incident ? "crisis-active" : undefined}>
       <header className="view-head">
         <p className="view-kicker">v3.0 SOVEREIGN FUSION · Unified Ops Node</p>
         <h1 id="ops-title">◈ Ops Node</h1>
@@ -282,6 +310,12 @@ export function OpsNode() {
               action.</strong> Review each plan, check the raw evidence behind
               any node, and treat scores as indicators — not certainty.
             </p>
+            <p className="muted" style={{ fontSize: ".8rem" }}>
+              Keep the habit sharp: the <strong>Field Manual</strong>
+              (<span className="mono">docs/field-manual/</span>) has three
+              ten-minute operator drills — spot the fabrication, halt the
+              swarm, withdraw consent.
+            </p>
           </>)}
           <div className="wizard-actions">
             {wizardStep > 0 && (
@@ -322,9 +356,31 @@ export function OpsNode() {
             {incident.delivery?.note ? ` — ${incident.delivery.note}` : ""}
           </p>
           {incident.checklist && (
-            <ol className="crisis-checklist">
-              {incident.checklist.map((c, i) => <li key={i}>{c}</li>)}
-            </ol>
+            <>
+              {/* v3.5 risk #10 — interactive response checklist */}
+              <p className="crisis-progress mono">
+                {incident.checklist.filter((_, i) => checkedSteps[i]).length}
+                /{incident.checklist.length} response steps complete
+              </p>
+              <ul className="crisis-checklist interactive">
+                {incident.checklist.map((c, i) => (
+                  <li key={i}>
+                    <label>
+                      <input type="checkbox" checked={!!checkedSteps[i]}
+                             onChange={() => toggleStep(i)} />
+                      <span className={checkedSteps[i] ? "done" : ""}>
+                        {c}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              {incident.ui_guidance && (
+                <p className="muted" style={{ fontSize: ".78rem" }}>
+                  {incident.ui_guidance}
+                </p>
+              )}
+            </>
           )}
           <button className="demo-btn" type="button" onClick={resolveCrisis}>
             Mark resolved
@@ -492,7 +548,12 @@ export function OpsNode() {
             </div>
           )}
           <nav className="pane-tabs" aria-label="Ops panes">
-            {(["strategy", "timeline", "alerts", "feed", "kpis", "stream"] as Pane[]).map((p) => (
+            {/* v3.5 risk #10 — during an ACTIVE incident the pane set is
+                reduced to essentials (stream + alerts); the rest reappear
+                on resolve. No content is deleted, just decluttered. */}
+            {((incident ? crisisPanes
+                        : ["strategy", "timeline", "alerts", "feed", "kpis",
+                           "stream"]) as Pane[]).map((p) => (
               <button key={p} type="button"
                       className={pane === p ? "active" : ""}
                       onClick={() => setPane(p)}>

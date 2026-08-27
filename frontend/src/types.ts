@@ -362,3 +362,55 @@ export interface Incident {
   created_at: string;
   checklist?: string[];
 }
+
+/* v3.3 — SOVEREIGN OPS NODE (blueprint v5.2) */
+export interface StreamEvent {
+  kind: "audit" | "heartbeat";
+  persistence: "persisted" | "live";
+  ts: string;
+  actor: string;
+  text: string;
+  detail?: string;
+}
+
+export interface StreamResponse {
+  events: StreamEvent[];
+  mesh: MeshStatus;
+  note: string;
+}
+
+export interface ComplianceComponent {
+  key: string;
+  label: string;
+  spec: string;
+  score: number;
+  max: number;
+  note: string;
+}
+
+export interface ComplianceIndex {
+  index: number;
+  grade: "A" | "B" | "C" | "REVIEW";
+  components: ComplianceComponent[];
+  indicator_notice: string;
+  tree_statuses: Record<string, number>;
+}
+
+export interface IdAuditResult {
+  identity: string;
+  identifier_type: string;
+  level: string;
+  verdict: "PASS" | "REVIEW" | "FAIL";
+  risk_points: number;
+  signals_total: number;
+  checks: {
+    check: string;
+    source: string;
+    verdict: string;
+    signals: string[];
+    detail: Record<string, unknown>;
+  }[];
+  hedge: string;
+  disclaimer: string;
+  provenance: { checks: string[]; degraded: string };
+}

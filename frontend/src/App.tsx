@@ -12,8 +12,9 @@ type Route = "home" | "ops" | "fact-check" | "journey" | "kyc" | "analytics" | "
 
 function routeFromHash(): Route {
   const h = window.location.hash.replace("#/", "");
-  return (["ops", "fact-check", "journey", "kyc", "analytics", "settings"] as Route[]).includes(h as Route)
-    ? (h as Route)
+  const alias = h === "govern" ? "settings" : h;  // v5.2 §6.C — "Govern" tab
+  return (["ops", "fact-check", "journey", "kyc", "analytics", "settings"] as Route[]).includes(alias as Route)
+    ? (alias as Route)
     : "home";
 }
 
@@ -59,12 +60,22 @@ export default function App() {
           <a href="#/analytics" className={route === "analytics" ? "active" : ""}>
             Analytics
           </a>
-          <a href="#/settings" className={route === "settings" ? "active" : ""}
-             aria-label="Settings — privacy, personalization, access">
-            ⚙ Settings
+          <a href="#/govern" className={route === "settings" ? "active" : ""}
+             aria-label="Govern — consent ledger, compliance index, data sovereignty">
+            ⚖ Govern
           </a>
         </nav>
       </header>
+
+      {/* blueprint v5.2 §3.B — mobile-first fixed bottom-nav */}
+      <nav className="bottomnav" aria-label="Mobile module navigation">
+        <a href="#/ops" className={route === "ops" ? "active" : ""}>◈<span>Ops</span></a>
+        <a href="#/" className={route === "home" ? "active" : ""}>⌂<span>Home</span></a>
+        <a href="#/fact-check" className={route === "fact-check" ? "active" : ""}>✓<span>Facts</span></a>
+        <a href="#/journey" className={route === "journey" ? "active" : ""}>➤<span>Journey</span></a>
+        <a href="#/kyc" className={route === "kyc" ? "active" : ""}>🛡<span>KYC</span></a>
+        <a href="#/govern" className={route === "settings" ? "active" : ""}>⚖<span>Govern</span></a>
+      </nav>
 
       <main id="main">
         {route === "home" && <Home />}

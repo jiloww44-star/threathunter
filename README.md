@@ -72,6 +72,7 @@ cd backend && python -m pytest tests
 | **v3.1** §3.4 Personalization | `backend/app/core/personalization.py` — consent-gated watchlists/priority/tolerance/format; CI-enforced rule: presentation & alerts only, never verdict/risk (§5.5 TRUST.md) |
 | **v3.1** §5.4 Access parity | `frontend/src/hooks/useBandwidth.ts` + Settings view — auto (Save-Data/2G) or manual low-bandwidth mode; JourneyMap degrades to a text-first risk strip |
 | **v3.2** Safety-by-design | UX review blockers closed: Plan Review gate (`/ops/plan`→`/approve`), Halt Execution (cooperative drain, HALTED states), report/data deletion, functional Incident Declaration (webhook-honest delivery), AUDITOR ethics gate (private-target + jailbreak refusals pre-decomposition), AI-output disclaimer everywhere, safety-event learning loop in KPIs — mapping: `design/Safety-Review-v3.2.md` |
+| **v3.3** Sovereign Ops Node (blueprint v5.2 "Tactical Swarm Edition") | Tactical HUD reskin (#020408 / lime #CFFF00 / teal #1A5454 / red #DC2626; Space Grotesk·Inter·JetBrains Mono), mobile bottom-nav, **Sovereign Data Stream** (`/ops/stream` — persisted audit rows + honestly-labelled live heartbeat pulses), **id_audit_l1** (`/privacy/id-audit` — VOYAGER L1 domain/carrier integrity, hedged PASS/REVIEW/FAIL, UNKNOWN ≠ PASS), identity-intel RGD fan-out (HUNTER→VOYAGER→AUDITOR with identifier-first entity extraction), **4-step onboarding wizard**, **Govern tab** with transparent **Compliance Index** (`/privacy/compliance-index`, 4×25 indicator — not a certification) — mapping: `design/SovereignOps-v5.2.md` |
 
 ## Repo layout
 
@@ -86,7 +87,7 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
   app/store/       evidence/signals/hypotheses/checks/review_queue +
                     v3.0 ops_trees/ops_tasks/notifications/audit_trail/
                     custom_agents/journey_watches
-  tests/           124 tests (engine / journey / kyc / API / geo / governance /
+  tests/           141 tests (engine / journey / kyc / API / geo / governance /
                     sovereign-fusion / privacy-personalization /
                     safety-by-design suites)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)

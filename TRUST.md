@@ -121,6 +121,25 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 6. v3.3 Sovereign Ops Node addendum
+
+- **`id_audit_l1` (VOYAGER) — blast radius: LOW-MEDIUM, review D2.** Read-only
+  identity-integrity indicators. Verdicts are hedged (PASS ≠ proof of
+  legitimacy; REVIEW/FAIL ≠ proof of abuse) and REQUIRE_HUMAN for any
+  consequential decision flows through the existing review queue. Carrier
+  integrity without a live carrier API reports UNKNOWN, which can only push a
+  result *toward* REVIEW — never toward PASS (fail-closed, §20).
+- **Compliance Index — blast radius: LOW, review D1.** Presentation-only
+  indicator computed from local records; the payload itself says it is "not
+  an audit certification." (Automation-bias guard: per-component notes state
+  exactly what was and was not measured.)
+- **Sovereign Data Stream — blast radius: LOW, review D1.** Read-only blend
+  of existing audit rows + live pulses; persistence labels prevent live
+  heartbeats being mistaken for durable records.
+- The v3.3 identity-intel RGD branch inherits the v3.2 ethics gate: private-
+  individual targeting is refused *before* any HUNTER/VOYAGER fan-out; the
+  regression is pinned by `test_sovereign_ops.py::test_ethics_gate_still_first`.
+
 ## 5. v3.0 SOVEREIGN FUSION addendum
 
 The v3.0 upgrade (see the master spec) introduces autonomous *orchestration*

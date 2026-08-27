@@ -126,6 +126,15 @@ def classify_goal(goal: str) -> list[str]:
         intents.append("claim")
     if not intents:
         intents.append("intel")  # generic OSINT sweep (A-05 path)
+    # v3.3 — blueprint v5.2 §7: "verify identity ... check for data leaks"
+    # goals fan out to HUNTER footprint + VOYAGER L1 integrity + AUDITOR
+    # mask/compliance, distinct from KYC/L3 screening above.
+    if any(k in g for k in ("data leak", "data breach", "breach",
+                            "footprint", "dork", "leaked credential")) and \
+            any(k in g for k in ("identity", "verify", "check", "user",
+                                 "email", "domain", "phone", "account")):
+        if "identity_intel" not in intents:
+            intents.append("identity_intel")
     return intents
 
 
@@ -150,6 +159,31 @@ def _claim_entity(goal: str) -> str:
     from ..core import nlp_lite
     ents = nlp_lite.extract_entities(goal)
     return ents[0] if ents else goal[:60]
+
+
+_LEAD_VERBS = ("verify", "check", "validate", "audit", "screen", "investigate",
+               "assess", "review", "inspect", "confirm", "find")
+
+
+def _identity_target(goal: str) -> str:
+    """v3.3 — prefer machine-shaped identifiers (email/phone/domain) over
+    naive NER, which latches onto the sentence-initial verb ('Verify…').
+    Falls back to NER with lead-verbs stripped."""
+    import re
+    m = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", goal)
+    if m:
+        return m.group(0)
+    m = re.search(r"\+\d[\d -]{7,14}\d", goal)
+    if m:
+        return re.sub(r"[\s-]+", "", m.group(0))
+    m = re.search(r"\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b", goal.lower())
+    if m:
+        return m.group(0)
+    ent = _claim_entity(goal)
+    words = ent.split()
+    if words and words[0].lower() in _LEAD_VERBS and len(words) > 1:
+        return " ".join(words[1:])
+    return ent
 
 
 def decompose(goal: str, context: dict | None = None) -> list[dict]:
@@ -227,6 +261,30 @@ def decompose(goal: str, context: dict | None = None) -> list[dict]:
         add("SENTINEL", "request_patch",
             "Request patch execution (AUDITOR-gated)", parent=vpr,
             params={"scored_from": vpr})
+
+    if "identity_intel" in intents:
+        # Blueprint v5.2 §7 flow: HUNTER footprint → VOYAGER L1 integrity →
+        # AUDITOR mask + compliance. AUDITOR's ethics gate already ran above,
+        # so private-individual targeting never reaches this fan-out.
+        entity = context.get("subject") or _identity_target(goal)
+        root = add("HUNTER", "footprint_scan",
+                   f"External footprint sweep: {entity[:60]}",
+                   params={"query": entity, "goal": goal})
+        l1 = add("VOYAGER", "id_audit_l1",
+                 f"L1 identity-integrity audit: {entity[:48]}",
+                 parent=root,
+                 params={"identity": context.get("identity") or entity,
+                         "identifier_type": context.get("identifier_type",
+                                                        "auto"),
+                         "domain": context.get("domain", ""),
+                         "phone": context.get("phone", ""),
+                         "from_task": root})
+        add("AUDITOR", "mask_pii",
+            "Mask PII in findings before report", parent=l1,
+            params={"text_from": l1})
+        add("AUDITOR", "compliance_overlay",
+            "Compliance check + ethics report", parent=l1,
+            params={"goal": goal, "subjects": [entity]})
 
     if "identity" in intents:
         entity = context.get("subject") or _claim_entity(goal)

@@ -3,7 +3,7 @@
 // entries are hash-chained server-side; preferences never touch scoring.
 import { useCallback, useEffect, useState } from "react";
 import { api, type ApiError } from "../api";
-import type { ConsentLedgerView, Prefs } from "../types";
+import type { ComplianceIndex, ConsentLedgerView, Prefs } from "../types";
 import { ErrorPanel } from "../components/shared";
 import {
   applyBandwidthAttr, getBandwidthMode, isLowBandwidth, setBandwidthMode,
@@ -32,16 +32,19 @@ export function Settings() {
   const [mode, setMode] = useState<BandwidthMode>(getBandwidthMode());
   const [error, setError] = useState<ApiError | null>(null);
   const [savedNote, setSavedNote] = useState("");
+  const [ci, setCi] = useState<ComplianceIndex | null>(null);  // v3.3 §6.C
 
   const load = useCallback(async (uid: string) => {
     setError(null);
     try {
-      const [c, l, p] = await Promise.all([
+      const [c, l, p, index] = await Promise.all([
         api.consentState(uid), api.consentLedger(), api.getPrefs(uid),
+        api.complianceIndex().catch(() => null),
       ]);
       setConsent(c.purposes);
       setLedgerOk(l.verification.chain_intact);
       setPrefs(p);
+      if (index) setCi(index);
     } catch (e) {
       setError(e as ApiError);
     }
@@ -85,15 +88,43 @@ export function Settings() {
   return (
     <section aria-labelledby="set-title">
       <header className="view-head">
-        <p className="view-kicker">v3.0 · Privacy & Personalization</p>
-        <h1 id="set-title">⚙️ Settings</h1>
+        <p className="view-kicker">v3.3 · Govern — Sovereign control (blueprint v5.2 §6.C)</p>
+        <h1 id="set-title">⚖️ Govern</h1>
         <p className="view-lede">
-          Consent is hash-chained and immutable (§5.3). Personalization shapes
-          presentation, notifications and defaults — <em>never</em> confidence,
-          verdicts or risk scores (§3.4). Access modes adapt the UI to your
-          device and network (§5.4).
+          Your oversight surface: consent is hash-chained and immutable (§5.3);
+          personalization shapes presentation — <em>never</em> verdicts (§3.4);
+          the Compliance Index below is computed from local records and is an
+          indicator, not a certification.
         </p>
       </header>
+
+      {/* v3.3 — blueprint v5.2 §6.C: Compliance Index */}
+      {ci && (
+        <div className="card" aria-label="Compliance Index">
+          <div className="ci-head">
+            <span className="ci-score">{ci.index}</span>
+            <span className={`ci-grade${ci.grade === "REVIEW" ? " review" : ""}`}>
+              {ci.grade}
+            </span>
+            <span className="dim" style={{ fontSize: "0.78rem" }}>
+              {ci.indicator_notice}
+            </span>
+          </div>
+          {ci.components.map(c => (
+            <div key={c.key} className="ci-comp">
+              <div className="ci-comp-top">
+                <span>{c.label} <span className="dim">· {c.spec}</span></span>
+                <span className="mono">{c.score}/{c.max}</span>
+              </div>
+              <div className="ci-bar" role="presentation">
+                <div className="ci-fill"
+                     style={{ width: `${(c.score / c.max) * 100}%` }} />
+              </div>
+              <div className="ci-note">{c.note}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card" style={{ maxWidth: 520 }}>
         <div className="field">

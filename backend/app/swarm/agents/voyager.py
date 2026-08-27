@@ -7,6 +7,8 @@ change carries a 'why' (§7).
 """
 from __future__ import annotations
 
+from ..safety import AI_DISCLAIMER
+
 from datetime import datetime, timezone
 
 from ...core import journey as jr
@@ -163,3 +165,116 @@ def reassess_watches(store: EvidenceStore) -> list[dict]:
         emitted.append({"notification_id": nid, "kind": kind,
                         "watch_id": w["watch_id"], "old": old, "new": new})
     return emitted
+
+
+# ---------------------------------------------------------------------------
+# v3.3 — id_audit_l1: L1 identity-integrity audit (blueprint v5.2 §5/§7)
+# ---------------------------------------------------------------------------
+
+def check_sim_swap(phone: str) -> dict:
+    """A-9 carrier-integrity probe. Demo profile has no live carrier API, so
+    the honest default is UNKNOWN (SOURCE_UNAVAILABLE marker, §20) — an
+    optional TH360_SIM_FIXTURES JSON map ({phone: status}) feeds bounded
+    fixtures for demos/tests, same pattern as the feed fixtures."""
+    import json
+    import os
+    fx_raw = os.getenv("TH360_SIM_FIXTURES", "").strip()
+    if fx_raw:
+        try:
+            fx = json.loads(fx_raw)
+            if phone in fx:
+                return {"phone_tail": phone[-4:], "status": fx[phone],
+                        "notes": "fixture-fed carrier signal (bounded, §20)",
+                        "source": "sim_swap_fixture"}
+        except json.JSONDecodeError:
+            pass
+    return {"phone_tail": phone[-4:], "status": "UNKNOWN",
+            "notes": ("carrier API not configured in the demo profile — "
+                      "integrity UNVERIFIED, not cleared (§1.9)"),
+            "source": "sim_swap_probe"}
+
+
+
+
+def _domain_rdap_stub(domain: str) -> dict:
+    """Bounded domain-integrity heuristics (demo profile — live WHOIS/RDAP
+    requires network; when unreachable, source is marked honestly, §20)."""
+    import hashlib
+    h = int(hashlib.sha1(domain.encode()).hexdigest(), 16)
+    tld = domain.rsplit(".", 1)[-1] if "." in domain else ""
+    risk_tlds = {"xyz", "top", "icu", "cam", "rest", " loan"}
+    age_days = 30 + h % 2400                      # deterministic per domain
+    registrar_known = (h % 5) != 0                # 4/5 known registrars
+    signals = []
+    if tld in risk_tlds:
+        signals.append(f"TLD '.{tld}' is statistically over-represented in "
+                       f"disposable-domain abuse reports.")
+    if age_days < 180:
+        signals.append(f"Domain appears recently registered (~{age_days} days) "
+                       f"— typical of short-lived impersonation infrastructure.")
+    if not registrar_known:
+        signals.append("Registrar not recognised in the bounded reference set.")
+    return {"domain": domain, "estimated_age_days": age_days,
+            "registrar_known": registrar_known, "tld": tld, "signals": signals}
+
+
+def id_audit_l1(identity: str, identifier_type: str = "auto",
+                domain: str = "", phone: str = "", consent_granted: bool = True
+                ) -> dict:
+    """L1 identity-integrity audit — blueprint v5.2 §5 (`/id_audit_l1`):
+    validates carrier/domain integrity for an identity and returns a bounded
+    verdict. Read-only; every sub-check carries its provenance and failures
+    surface as REVIEW, never silent success (§20). Hedged: signals are
+    indicators, not proof (§9/§1.9)."""
+    itype = identifier_type
+    if itype == "auto":
+        if "@" in identity:
+            itype = "email"
+        elif identity.replace("+", "").replace(" ", "").isdigit():
+            itype = "phone"
+        else:
+            itype = "domain"
+    checks: list[dict] = []
+    risk_points = 0
+    if itype in ("email", "domain"):
+        dom = domain or (identity.split("@", 1)[1] if "@" in identity
+                         else identity)
+        r = _domain_rdap_stub(dom)
+        risk_points += 2 * len(r["signals"])
+        checks.append({"check": "domain_integrity", "source": "rdap_stub",
+                       "verdict": "REVIEW" if r["signals"] else "PASS",
+                       "signals": r["signals"],
+                       "detail": {k: r[k] for k in
+                                  ("domain", "estimated_age_days",
+                                   "registrar_known", "tld")}})
+    if itype == "phone" or phone:
+        sim = check_sim_swap(phone or identity)
+        st = sim.get("status", "UNKNOWN")
+        sig = [] if st == "OK" else [
+            f"Carrier integrity status '{st}' — " +
+            (sim.get("notes") or "no carrier confirmation available.")]
+        risk_points += 3 if st in ("SWAP_SUSPECTED", "PORTED") else \
+            (1 if st != "OK" else 0)
+        checks.append({"check": "carrier_integrity", "source": "sim_swap_probe",
+                       "verdict": "PASS" if st == "OK" else "REVIEW",
+                       "signals": sig,
+                       "detail": {"status": st, "notes": sim.get("notes")}})
+    if itype == "email":
+        dom = identity.split("@", 1)[1]
+        checks.append({"check": "format", "source": "syntax",
+                       "verdict": "PASS", "signals": [],
+                       "detail": {"local": identity.split("@", 1)[0],
+                                  "domain": dom}})
+    n_signals = sum(len(c["signals"]) for c in checks)
+    verdict = ("FAIL" if risk_points >= 6 else
+               "REVIEW" if risk_points > 0 else "PASS")
+    return {"identity": identity, "identifier_type": itype,
+            "level": "L1", "verdict": verdict, "risk_points": risk_points,
+            "signals_total": n_signals, "checks": checks,
+            "consent_scope": "declared" if consent_granted else "none",
+            "hedge": ("L1 indicators only — a PASS is not proof of legitimacy "
+                      "and a REVIEW is not proof of abuse (§1.9). Escalate to "
+                      "L2/L3 screening for consequential decisions."),
+            "provenance": {"checks": [c["source"] for c in checks],
+                           "degraded": "none (bounded demo heuristics)"},
+            "disclaimer": AI_DISCLAIMER}

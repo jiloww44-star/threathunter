@@ -316,3 +316,33 @@ async def kpis(db=Depends(get_db)):
 async def audit(db=Depends(get_db)):
     return {"audit_trail": db.audit_trail(),
             "policy_version": registry.POLICY_VERSION}
+
+
+@router.get("/ops/stream")
+def sovereign_stream(limit: int = 60, db=Depends(get_db)):
+    """Blueprint v5.2 §3.B — Sovereign Data Stream: a low-level, honest blend
+    of PERSISTED audit events (A-06 trail — the source of truth) and LIVE
+    volatile pulses (in-memory mesh heartbeats, marked as such, §20)."""
+    from datetime import datetime, timezone
+    limit = max(1, min(limit, 120))
+    events: list[dict] = []
+    for row in db.audit_trail(limit):
+        events.append({
+            "kind": "audit", "persistence": "persisted",
+            "ts": row["created_at"],
+            "actor": row.get("actor", "?"),
+            "text": f"{row.get('action','?')} → {row.get('decision','?')}",
+            "detail": row.get("detail", "")})
+    mesh = pathfinder.MESH.status()
+    peers_up = sum(1 for p in mesh["peers"] if p["alive"])
+    events.append({
+        "kind": "heartbeat", "persistence": "live",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "actor": mesh["primary"],
+        "text": f"heartbeat tick — {peers_up}/{mesh['peer_count']} peers up, "
+                f"primary {mesh['primary']}, failovers {mesh['failovers']}",
+        "detail": "volatile in-memory pulse (durable record = audit trail)"})
+    events.sort(key=lambda e: e["ts"], reverse=True)
+    return {"events": events[:limit], "mesh": mesh,
+            "note": ("Persisted rows come from the append-only audit trail; "
+                     "live rows are volatile pulses and are labelled as such.")}

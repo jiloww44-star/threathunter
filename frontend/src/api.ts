@@ -1,9 +1,10 @@
 // API client — relative paths only; the Vite dev proxy forwards /api → :8000
 import type {
-  AgentInfo, AnalyticsSummary, ConsentLedgerView, ConsentStateView,
-  CortexReply, FactCheckResponse, GraphData, Incident, JourneyResponse,
-  KYCResponse, KYCFixture, MeshStatus, OpsKpis, OpsNotification, PlanProposal,
-  Prefs, RecentCheck, Statistics, StrategyMap, TreeSummary, UnifiedReport,
+  AgentInfo, AnalyticsSummary, ComplianceIndex, ConsentLedgerView,
+  ConsentStateView, CortexReply, FactCheckResponse, GraphData, IdAuditResult,
+  Incident, JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
+  OpsNotification, PlanProposal, Prefs, RecentCheck, Statistics, StrategyMap,
+  StreamResponse, TreeSummary, UnifiedReport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -150,6 +151,15 @@ export const api = {
   deleteUserData: (userId: string) =>
     request<{ deleted: boolean }>(`/api/v1/data/user/${userId}`, {
       method: "DELETE",
+    }),
+  /* v3.3 — SOVEREIGN OPS NODE (blueprint v5.2) */
+  opsStream: (limit = 60) =>
+    request<StreamResponse>(`/api/v1/ops/stream?limit=${limit}`),
+  complianceIndex: () => request<ComplianceIndex>("/api/v1/privacy/compliance-index"),
+  idAudit: (identity: string, identifierType = "auto") =>
+    request<IdAuditResult>("/api/v1/privacy/id-audit", {
+      method: "POST",
+      body: JSON.stringify({ identity, identifier_type: identifierType }),
     }),
 };
 

@@ -31,7 +31,7 @@ interface ChatMsg {
   context?: Record<string, string | null>;
 }
 
-type Pane = "strategy" | "timeline" | "alerts" | "feed" | "kpis";
+type Pane = "strategy" | "timeline" | "alerts" | "feed" | "kpis" | "stream";
 
 function newSessionId(): string {
   return `ui-${Math.random().toString(36).slice(2, 10)}-${Date.now()
@@ -70,9 +70,11 @@ export function OpsNode() {
   const [sevSummary, setSevSummary] = useState("");
   const [onboarded, setOnboarded] = useState(
     () => localStorage.getItem(ONBOARD_KEY) === "1");
+  const [wizardStep, setWizardStep] = useState(0);   // v3.3 §6.A
+  const [stream, setStream] = useState<import("../types").StreamResponse | null>(null);
 
   const refreshPanels = useCallback(async () => {
-    const [m, a, n, k, f, tl, inc] = await Promise.all([
+    const [m, a, n, k, f, tl, inc, st] = await Promise.all([
       api.opsMesh().catch(() => null),
       api.opsAgents().catch(() => null),
       api.opsNotifications().catch(() => null),
@@ -80,6 +82,7 @@ export function OpsNode() {
       api.recent().catch(() => null),
       api.opsTrees().catch(() => null),
       api.activeIncident().catch(() => null),
+      api.opsStream(80).catch(() => null),     // v3.3 §3.B data stream
     ]);
     if (m) setMesh(m);
     if (a) setAgents(a.agents);
@@ -88,6 +91,7 @@ export function OpsNode() {
     if (f) setFeed(f);
     if (tl) setTreeList(tl);
     if (inc) setIncident(inc.incident);
+    if (st) setStream(st);
   }, []);
 
   useEffect(() => { refreshPanels(); }, [refreshPanels]);
@@ -227,31 +231,76 @@ export function OpsNode() {
         </p>
       </header>
 
-      {/* v3.2 trust calibration — first-run "AI Partnership" (checklist B) */}
+      {/* v3.3 (blueprint v5.2 §6.A) — 4-step onboarding wizard: establishes
+          trust and sets boundaries BEFORE the first goal is dispatched. */}
       {!onboarded && (
-        <div className="card onboarding-banner" role="note"
-             aria-label="AI partnership notice">
-          <h3 style={{ marginTop: 0 }}>🤝 AI Partnership — read once</h3>
-          <p>
-            <strong>Welcome to the ThreatHunter360 Ops Node.</strong> This is
-            an AI-powered <em>assistant</em> for threat intelligence and
-            security operations: you define a goal, the governed agent swarm
-            helps you build and execute a plan.
-          </p>
-          <p>
-            <strong>It is not an oracle.</strong> The AI can be wrong or
-            incomplete — verify all AI-generated insights and plans with your
-            team's protocols before taking action. You stay in command:
-            plans can be reviewed before execution, halted mid-run, and every
-            destructive action waits for human approval.
-          </p>
-          <button className="btn" type="button"
-                  onClick={() => {
-                    localStorage.setItem(ONBOARD_KEY, "1");
-                    setOnboarded(true);
-                  }}>
-            Understood — I'll verify before acting
-          </button>
+        <div className="card wizard" role="dialog" aria-modal="false"
+             aria-label="Sovereign onboarding wizard">
+          <div className="wizard-steps" aria-hidden="true">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className={`wizard-dot${i <= wizardStep ? " on" : ""}`} />
+            ))}
+          </div>
+          {wizardStep === 0 && (<>
+            <h3>Welcome, Sovereign — you command, the fleet advises</h3>
+            <p>
+              <strong>ThreatHunter360 is an AI-powered assistant</strong> for
+              threat intelligence and security operations. You define a goal;
+              the governed agent swarm decomposes it, gathers evidence and
+              drafts recommendations. It is not an oracle and never acts on
+              your behalf without an approved plan.
+            </p>
+          </>)}
+          {wizardStep === 1 && (<>
+            <h3>Step 2 — The swarm's boundaries</h3>
+            <p>
+              Agents hold <strong>enumerated, least-privilege capabilities</strong>
+              (registry A-14). Patching, messaging and any external effect pause
+              for human approval. The swarm can be halted mid-run at any time —
+              the <em>Halt Swarm</em> control is always visible on running plans.
+            </p>
+          </>)}
+          {wizardStep === 2 && (<>
+            <h3>Step 3 — Privacy &amp; the AUDITOR gate</h3>
+            <p>
+              Personal data is masked at the source by the AUDITOR agent;
+              identity lookups produce hedged indicators, never verdicts on
+              persons. Your consent decisions live on an immutable ledger, and
+              the <em>Govern</em> tab lets you inspect or permanently delete
+              your session data. AI output is always labelled as such.
+            </p>
+          </>)}
+          {wizardStep === 3 && (<>
+            <h3>Step 4 — Your part of the partnership</h3>
+            <p>
+              AI can be wrong or incomplete. <strong>Verify all AI-generated
+              insights and plans with your team's protocols before taking
+              action.</strong> Review each plan, check the raw evidence behind
+              any node, and treat scores as indicators — not certainty.
+            </p>
+          </>)}
+          <div className="wizard-actions">
+            {wizardStep > 0 && (
+              <button className="btn ghost" type="button"
+                      onClick={() => setWizardStep(s => s - 1)}>
+                Back
+              </button>
+            )}
+            {wizardStep < 3 ? (
+              <button className="btn" type="button"
+                      onClick={() => setWizardStep(s => s + 1)}>
+                Next
+              </button>
+            ) : (
+              <button className="btn" type="button"
+                      onClick={() => {
+                        localStorage.setItem(ONBOARD_KEY, "1");
+                        setOnboarded(true);
+                      }}>
+                Understood — I'll verify before acting
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -418,13 +467,14 @@ export function OpsNode() {
             </div>
           )}
           <nav className="pane-tabs" aria-label="Ops panes">
-            {(["strategy", "timeline", "alerts", "feed", "kpis"] as Pane[]).map((p) => (
+            {(["strategy", "timeline", "alerts", "feed", "kpis", "stream"] as Pane[]).map((p) => (
               <button key={p} type="button"
                       className={pane === p ? "active" : ""}
                       onClick={() => setPane(p)}>
                 {{ strategy: "Strategy Map", timeline: "Timeline",
                    alerts: `Alerts${alerts.length ? ` (${alerts.length})` : ""}`,
-                   feed: "Intel Feed", kpis: "KPIs" }[p]}
+                   feed: "Intel Feed", kpis: "KPIs",
+                   stream: "Data Stream" }[p]}
               </button>
             ))}
           </nav>
@@ -598,6 +648,40 @@ export function OpsNode() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* v3.3 — blueprint v5.2 §3.B: Sovereign Data Stream. Low-level
+              view of agent API calls (persisted audit rows) and live system
+              heartbeats — each row honestly labelled by persistence. */}
+          {pane === "stream" && (
+            <div className="card" aria-label="Sovereign Data Stream">
+              <h3 style={{ marginTop: 0 }}>🛰 Sovereign Data Stream</h3>
+              <p className="dim" style={{ marginTop: -4, fontSize: "0.8rem" }}>
+                {stream?.note ??
+                  "Persisted audit events plus live volatile pulses."}
+              </p>
+              <div className="stream-list" role="log" aria-live="off">
+                {(stream?.events ?? []).map((e, i) => (
+                  <div key={`${e.ts}-${i}`}
+                       className={`stream-row kind-${e.kind}`}>
+                    <span className="stream-ts">
+                      {e.ts.slice(11, 19)}
+                    </span>
+                    <span className="stream-actor">{e.actor}</span>
+                    <span className="stream-text">
+                      {e.text}
+                      <span className={`stream-badge ${e.persistence}`}>
+                        {e.persistence.toUpperCase()}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+                {(!stream || stream.events.length === 0) && (
+                  <p className="dim">No stream events yet — submit a goal or
+                    run an L1 audit to light up the trail.</p>
+                )}
+              </div>
             </div>
           )}
 

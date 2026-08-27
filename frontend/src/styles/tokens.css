@@ -118,3 +118,43 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ==========================================================================
+   Design tokens v3.3 — SOVEREIGN OPS NODE tactical HUD (blueprint v5.2 §3.A)
+   Palette: Background #020408 · Primary #CFFF00 (Lime Neon)
+            Secondary #1A5454 (Deep Teal) · Destructive #DC2626 (Crisis Red)
+   Type: Space Grotesk (headlines) · Inter (body) · JetBrains Mono (data)
+   Evidence semantics (fact/evidence/inference/risk) are PRESERVED — the
+   tactical palette governs chrome, never evidentiary meaning.
+   ========================================================================== */
+:root {
+  --color-neutral-bg: #020408;            /* v5.2 background */
+  --color-surface: #070d14;               /* lifted card */
+  --color-surface-2: #0b141c;             /* insets, wells */
+  --color-border: #14333a;                /* teal-tinted hairline */
+  --color-border-strong: #1f4a52;
+  --color-text: #e9f7ee;                  /* high-contrast near-white */
+  --color-text-dim: #93aca2;
+  --color-text-faint: #64807a;
+
+  --color-accent: #cfff00;                /* v5.2 Lime Neon primary */
+  --color-accent-hover: #dcff4d;
+  --color-on-accent: #101600;             /* dark text on lime */
+  --color-accent-2: #1a5454;              /* v5.2 Deep Teal secondary */
+  --color-accent-2-bright: #2fbdb4;       /* teal for text-level accents */
+  --color-destructive: #dc2626;           /* v5.2 Crisis Red */
+  --color-focus-ring: #cfff00;
+  --color-accent-glow: 0 0 14px rgb(207 255 0 / .28);
+
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .6), 0 2px 10px rgb(0 0 0 / .4);
+  --shadow-2: 0 6px 18px rgb(0 0 0 / .55), 0 2px 6px rgb(0 0 0 / .5);
+  --shadow-pop: 0 18px 50px rgb(0 0 0 / .7), 0 4px 14px rgb(0 0 0 / .55);
+}
+h1, h2, h3, .eyebrow, .kicker, .logo, .nav a, .bottomnav a {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}

@@ -741,3 +741,133 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
 .tree-delete:hover, .tree-delete:focus-visible { opacity: 1; }
 
 .task-item.st-halted { border-left-color: #64748b; opacity: .75; }
+
+/* ==========================================================================
+   v3.3 — SOVEREIGN OPS NODE chrome (blueprint v5.2)
+   ========================================================================== */
+
+/* §3.B — fixed bottom-nav (mobile-first). Desktop keeps the top nav. */
+.bottomnav {
+  display: none;
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--color-border-strong);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}
+.bottomnav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  text-decoration: none;
+  font-size: 1.05rem;
+}
+.bottomnav a span {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bottomnav a.active {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+@media (max-width: 900px) {
+  .bottomnav { display: grid; }
+  .topbar .nav { display: none; }
+  .shell { padding-bottom: 64px; }
+}
+
+/* §6.A — 4-step onboarding wizard */
+.wizard {
+  border: 1px solid var(--color-accent);
+  box-shadow: var(--color-accent-glow), var(--shadow-2);
+}
+.wizard-steps { display: flex; gap: 6px; margin: 10px 0 14px; }
+.wizard-dot {
+  height: 6px; flex: 1; border-radius: 3px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+.wizard-dot.on { background: var(--color-accent); box-shadow: var(--color-accent-glow); }
+.wizard h3 { margin-top: 0; }
+.wizard-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
+
+/* §3.B — Sovereign Data Stream pane */
+.stream-list {
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  max-height: 420px;
+  overflow-y: auto;
+}
+.stream-row {
+  display: grid;
+  grid-template-columns: 74px 92px 1fr;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-surface-2) 60%, transparent);
+  border-left: 2px solid var(--color-border);
+  align-items: baseline;
+}
+.stream-row.kind-heartbeat { border-left-color: var(--color-accent); }
+.stream-row.kind-audit { border-left-color: var(--color-risk-mod); }
+.stream-ts { color: var(--color-text-faint); }
+.stream-actor { color: var(--color-accent-2-bright); font-weight: 600; }
+.stream-text { color: var(--color-text-dim); word-break: break-word; }
+.stream-badge {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.stream-badge.live { color: var(--color-accent); border: 1px solid var(--color-accent); }
+.stream-badge.persisted { color: var(--color-text-faint); border: 1px solid var(--color-border-strong); }
+
+/* §6.C — Compliance Index card (Govern tab) */
+.ci-head { display: flex; align-items: baseline; gap: 14px; }
+.ci-score {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-shadow: var(--color-accent-glow);
+  line-height: 1;
+}
+.ci-grade {
+  font-family: var(--font-mono);
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  letter-spacing: 0.12em;
+}
+.ci-grade.review { border-color: var(--color-destructive); color: var(--color-destructive); }
+.ci-comp { margin: 10px 0; }
+.ci-comp-top { display: flex; justify-content: space-between; font-size: var(--text-sm); }
+.ci-bar {
+  height: 6px; border-radius: 3px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+.ci-fill { height: 100%; background: var(--color-accent); }
+.ci-note { color: var(--color-text-faint); font-size: var(--text-xs); margin-top: 3px; }
+
+/* Tactical HUD button refresh — lime primary reads as high-contrast on
+   #020408 (checked: contrast 15.2:1 vs on-accent #101600). */
+.btn {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

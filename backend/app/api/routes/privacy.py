@@ -92,3 +92,34 @@ def save_prefs(user_id: str, req: PrefsRequest, db=Depends(get_db)):
         journey_priority=req.journey_priority,
         notify_tolerance=req.notify_tolerance,
         output_format=req.output_format)
+
+
+class IdAuditRequest(BaseModel):
+    identity: str = Field(min_length=3, max_length=254)
+    identifier_type: str = "auto"      # auto | email | domain | phone
+    domain: str = ""
+    phone: str = ""
+    consent_granted: bool = True
+
+
+@router.post("/privacy/id-audit")
+def id_audit(req: IdAuditRequest, db=Depends(get_db)):
+    """Blueprint v5.2 §5 — `/id_audit_l1`: L1 carrier/domain integrity audit.
+    Read-only; results are hedged indicators, never verdicts on persons."""
+    from ...swarm.agents import voyager
+    result = voyager.id_audit_l1(
+        identity=req.identity, identifier_type=req.identifier_type,
+        domain=req.domain, phone=req.phone,
+        consent_granted=req.consent_granted)
+    db.audit("AUDITOR", "id_audit_l1", "LOGGED",
+             f"L1 audit {req.identifier_type} on {req.identity[:40]} → "
+             f"{result['verdict']}",
+             policy_version="sovereign-policy/3.3.0")
+    return result
+
+
+@router.get("/privacy/compliance-index")
+def compliance_index(db=Depends(get_db)):
+    """Blueprint v5.2 §6.C — the Govern tab's Compliance Index."""
+    from ...core import compliance
+    return compliance.compute_index(db)

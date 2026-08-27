@@ -45,10 +45,12 @@ NATIVE_AGENTS: dict[str, AgentSpec] = {
                      "(spec §5.1; v1 §5–9 restored)."),
         api_functions=["assess_journey", "build_risk_timeline",
                        "compare_routes", "predict_route_risk",
-                       "monitor_active_journey", "parse_route_context"],
+                       "monitor_active_journey", "parse_route_context",
+                       "check_sim_swap", "id_audit_l1"],
         read_only_functions=["assess_journey", "build_risk_timeline",
                              "compare_routes", "predict_route_risk",
-                             "parse_route_context"]),
+                             "parse_route_context", "check_sim_swap",
+                             "id_audit_l1"]),
     "SENTINEL": AgentSpec(
         agent_id="SENTINEL", name="SENTINEL", role="Defense",
         description=("CVE scanning, VPR-style prioritization, remediation "

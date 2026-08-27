@@ -23,7 +23,8 @@ def log_event(store: EvidenceStore, event: str, *, actor: str,
               detail: str) -> None:
     """Safety learning loop (checklist J). Named events (keep closed set):
     halt_requested · plan_approved · plan_rejected · incident_declared ·
-    ethics_flag · pii_masked · tree_deleted · user_data_deleted"""
+    ethics_flag · pii_masked · tree_deleted · user_data_deleted ·
+    crisis_signal_detected (v3.4)"""
     store.audit(actor=actor, action=f"safety_event:{event}",
                 decision="ALLOW", detail=detail,
                 policy_version=POLICY_VERSION)

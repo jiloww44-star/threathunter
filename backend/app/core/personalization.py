@@ -54,15 +54,20 @@ def get(store: EvidenceStore, user_id: str) -> dict:
 def save(store: EvidenceStore, user_id: str, *, watchlists: list[str] | None,
          journey_priority: str | None, notify_tolerance: str | None,
          output_format: str | None) -> dict:
-    """Consent-gated write (§5.3): no 'personalization' grant → §20-classified
-    CONSENT_REQUIRED. Withdrawn consent also blocks (withdrawal is honored
-    immediately)."""
-    state = privacy.current_state(store, user_id, "personalization")
+    """Consent-gated write (§5.3): no effective 'personalization' grant →
+    §20-classified CONSENT_REQUIRED. Withdrawn consent always blocks
+    (withdrawal is honored immediately). v3.4: the gate reads the EFFECTIVE
+    state — an explicit ledger entry wins, else the region default applies
+    (e.g. an opt-out region's soft grant), never silently."""
+    eff = privacy.effective_consent(store, user_id, "personalization")
+    state = eff["state"]
     if state != "granted":
         raise PipelineError(
             "CONSENT_REQUIRED", status=403,
             detail=("storing preferences requires consent to the "
-                    f"'personalization' purpose (current: {state})"))
+                    f"'personalization' purpose (current: "
+                    f"{privacy.current_state(store, user_id, 'personalization')}"
+                    f", region default: {eff['region']})"))
     cur = get(store, user_id)
     w = watchlists if watchlists is not None else cur["watchlists"]
     w = [x.strip() for x in w if x and x.strip()][:20]

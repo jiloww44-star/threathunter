@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (   -- §3.4 personalization layer
     journey_priority TEXT DEFAULT 'balanced',     -- presentation default only
     notify_tolerance TEXT DEFAULT 'MODERATE',     -- alert threshold default
     output_format TEXT DEFAULT 'novice',          -- novice | analyst (§19)
+    region TEXT DEFAULT 'GLOBAL',                 -- v3.4 consent defaults scope
     watchlist_state_json TEXT DEFAULT '{}',       -- entity -> signal count seen
     updated_at TEXT
 );
@@ -287,6 +288,13 @@ class EvidenceStore:
             # v3.2 — watches are personal data (deletable per user)
             self._conn.execute(
                 "ALTER TABLE journey_watches ADD COLUMN user_id TEXT")
+        up = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(user_preferences)")}
+        if "region" not in up:
+            # v3.4 — region-aware consent defaults (red-team review #9)
+            self._conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN region "
+                "TEXT DEFAULT 'GLOBAL'")
 
     def close(self):
         global _store
@@ -1119,6 +1127,19 @@ class EvidenceStore:
                      updated_at=excluded.updated_at""",
                 (user_id, json.dumps(watchlists), journey_priority,
                  notify_tolerance, output_format, json.dumps(state), _now()))
+            self._conn.commit()
+
+    def set_prefs_region(self, user_id: str, region: str) -> None:
+        """v3.4 — region is a *privacy* input (consent defaults), not a
+        personalization surface, so it is writable without the
+        personalization-consent gate; the write is audited in privacy.py."""
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO user_preferences(user_id, region, updated_at)
+                   VALUES (?,?,?)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     region=excluded.region, updated_at=excluded.updated_at""",
+                (user_id, region, _now()))
             self._conn.commit()
 
     def update_watchlist_state(self, user_id: str, state: dict):

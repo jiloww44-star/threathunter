@@ -269,6 +269,8 @@ export interface CortexReply {
   report?: UnifiedReport;
   progress: string[];
   speakable?: boolean;
+  /** v3.4 red-team #3 — present when crisis language was detected. */
+  crisis?: { phrase: string; action: "declare_incident" };
 }
 
 export interface AgentInfo {
@@ -315,11 +317,25 @@ export interface MeshStatus {
 // --------------- §5.3 consent ledger + §3.4 personalization ----------------
 export interface ConsentStateView {
   user_id: string;
+  /** v3.4 red-team #9 — the user's region scoping consent defaults. */
+  region?: string;
+  region_notice?: string;
   purposes: Record<string, string>; // purpose -> granted | withdrawn | never_asked
+  /** v3.4 — effective state per purpose, with honest origin. */
+  effective?: Record<string,
+    { purpose: string; state: string; origin: "ledger" | "region_default";
+      region: string }>;
   ledger: Array<{
     id: string; user_id: string; purpose: string; state: string;
     detail: string; entry_hash: string; created_at: string;
   }>;
+}
+
+export interface RegionsView {
+  regions: Record<string,
+    { label: string; mode: "opt-in" | "opt-out";
+      defaults: Record<string, string> }>;
+  notice: string;
 }
 
 export interface ConsentLedgerView {

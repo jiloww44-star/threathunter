@@ -66,6 +66,8 @@ export function OpsNode() {
   const [plan, setPlan] = useState<PlanProposal | null>(null);
   const [incident, setIncident] = useState<Incident | null>(null);
   const [crisisOpen, setCrisisOpen] = useState(false);
+  const [crisisSignal, setCrisisSignal] = useState<
+    { phrase: string; action: string } | null>(null);  // v3.4 red-team #3
   const [sev, setSev] = useState("SEV2");
   const [sevSummary, setSevSummary] = useState("");
   const [onboarded, setOnboarded] = useState(
@@ -117,6 +119,8 @@ export function OpsNode() {
         role: "cortex", text: r.text, progress: r.progress,
         context: r.context,
       }]);
+      // v3.4 red-team #3 — crisis language surfaces the REAL pathway
+      if (r.crisis) setCrisisSignal(r.crisis);
       if (r.report) setReport(r.report);
       if (r.tree_id) await loadTree(r.tree_id);
       refreshPanels();
@@ -418,6 +422,27 @@ export function OpsNode() {
               🚨 Declare incident
             </button>
           </div>
+
+          {/* v3.4 red-team #3 — the cortex detected crisis language; surface
+              the REAL pathway (declare = checklist + honest on-call notify),
+              never a cosmetic badge. */}
+          {crisisSignal && !incident && (
+            <div className="crisis-signal" role="alert">
+              <span>
+                Crisis language detected (<em>“{crisisSignal.phrase}”</em>).
+                If this is a live incident, declare it:
+              </span>
+              <button type="button" className="crisis-btn"
+                      onClick={() => { setCrisisOpen(true); }}>
+                Declare now
+              </button>
+              <button type="button" className="btn ghost"
+                      aria-label="Dismiss crisis suggestion"
+                      onClick={() => setCrisisSignal(null)}>
+                Dismiss
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ------------------- right pane: tabs ------------------- */}

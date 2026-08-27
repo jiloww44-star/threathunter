@@ -42,10 +42,39 @@ def grant_or_withdraw(req: ConsentRequest, db=Depends(get_db)):
 
 @router.get("/privacy/consent/{user_id}")
 def consent_state(user_id: str, db=Depends(get_db)):
+    region = privacy.get_region(db, user_id)
     return {"user_id": user_id,
+            "region": region,
+            "region_notice": privacy.REGION_NOTICE,
             "purposes": {p: privacy.current_state(db, user_id, p)
                          for p in privacy.PURPOSES},
+            "effective": {p: privacy.effective_consent(db, user_id, p)
+                          for p in privacy.PURPOSES},
             "ledger": db.consent_ledger(user_id=user_id, limit=50)}
+
+
+class RegionRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=64)
+    region: str
+
+
+@router.get("/privacy/regions")
+def list_regions():
+    """v3.4 — declared regions + their default modes (red-team #9)."""
+    return {"regions": {k: {"label": v["label"], "mode": v["mode"],
+                            "defaults": v["defaults"]}
+                        for k, v in privacy.REGIONS.items()},
+            "notice": privacy.REGION_NOTICE}
+
+
+@router.put("/privacy/region")
+def set_user_region(req: RegionRequest, db=Depends(get_db)):
+    """v3.4 — set the user's region (scopes consent DEFAULTS only; explicit
+    ledger decisions always win, biometrics stay opt-in everywhere)."""
+    try:
+        return privacy.set_region(db, req.user_id, req.region)
+    except ValueError as e:
+        raise PipelineError("INVALID_CONSENT", status=400, detail=str(e))
 
 
 @router.get("/privacy/ledger")

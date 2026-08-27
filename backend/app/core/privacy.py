@@ -20,6 +20,79 @@ from ..store.db import EvidenceStore
 PURPOSES = ("kyc_biometrics", "personalization", "journey_history",
             "analytics")  # closed set — §25 declared purposes
 
+# ---------------------------------------------------------------------------
+# v3.4 — region-aware consent defaults (red-team review #9).
+# These are PRODUCT defaults, not legal advice (§20 honesty): they choose
+# the pre-ledger state a purpose sits in for a user who has never been asked.
+# An explicit ledger entry ALWAYS wins over any regional default.
+# `kyc_biometrics` is opt-in in EVERY region — sensitive biometrics never
+# ride an opt-out default.
+# ---------------------------------------------------------------------------
+REGIONS: dict[str, dict] = {
+    "GLOBAL": {
+        "label": "Global default (opt-in)",
+        "mode": "opt-in",
+        "defaults": {p: "withdrawn" for p in PURPOSES},
+    },
+    "EU_UK": {
+        "label": "EU/UK — GDPR-style opt-in",
+        "mode": "opt-in",
+        "defaults": {p: "withdrawn" for p in PURPOSES},
+    },
+    "NG": {
+        "label": "Nigeria — NDPA-style opt-in",
+        "mode": "opt-in",
+        "defaults": {p: "withdrawn" for p in PURPOSES},
+    },
+    "US": {
+        "label": "United States — opt-out style",
+        "mode": "opt-out",
+        "defaults": {"kyc_biometrics": "withdrawn",
+                     "personalization": "granted",
+                     "journey_history": "granted",
+                     "analytics": "granted"},
+    },
+}
+DEFAULT_REGION = "GLOBAL"
+REGION_NOTICE = (
+    "Regional defaults are product choices, not legal advice. An explicit "
+    "consent decision on the ledger always overrides them; biometrics stay "
+    "opt-in everywhere.")
+
+
+def get_region(store: EvidenceStore, user_id: str) -> str:
+    row = store.get_prefs(user_id)
+    return (row or {}).get("region") or DEFAULT_REGION
+
+
+def set_region(store: EvidenceStore, user_id: str, region: str) -> dict:
+    if region not in REGIONS:
+        raise ValueError(f"unknown region '{region}' "
+                         f"(declared: {', '.join(REGIONS)})")
+    store.set_prefs_region(user_id, region)
+    store.audit(actor=user_id, action="region_set", decision="ALLOW",
+                detail=f"region → {region} (consent defaults scope)",
+                policy_version="sovereign-policy/3.4.0")
+    return {"user_id": user_id, "region": region,
+            "mode": REGIONS[region]["mode"], "notice": REGION_NOTICE}
+
+
+def effective_consent(store: EvidenceStore, user_id: str, purpose: str
+                      ) -> dict:
+    """Effective state layered honestly: ledger entry (origin='ledger') wins;
+    otherwise the regional default (origin='region_default'), so the UI can
+    show a user *why* something is on/off before they are ever asked."""
+    if purpose not in PURPOSES:
+        raise ValueError(f"unknown consent purpose '{purpose}'")
+    ledger_state = current_state(store, user_id, purpose)
+    region = get_region(store, user_id)
+    if ledger_state != "never_asked":
+        return {"purpose": purpose, "state": ledger_state,
+                "origin": "ledger", "region": region}
+    return {"purpose": purpose,
+            "state": REGIONS[region]["defaults"].get(purpose, "withdrawn"),
+            "origin": "region_default", "region": region}
+
 
 def _hash_entry(entry_id: str, user_id: str, purpose: str, state: str,
                 detail: str, prev_hash: str) -> str:

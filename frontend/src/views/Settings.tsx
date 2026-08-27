@@ -3,7 +3,8 @@
 // entries are hash-chained server-side; preferences never touch scoring.
 import { useCallback, useEffect, useState } from "react";
 import { api, type ApiError } from "../api";
-import type { ComplianceIndex, ConsentLedgerView, Prefs } from "../types";
+import type { ComplianceIndex, ConsentLedgerView, ConsentStateView, Prefs,
+  RegionsView } from "../types";
 import { ErrorPanel } from "../components/shared";
 import {
   applyBandwidthAttr, getBandwidthMode, isLowBandwidth, setBandwidthMode,
@@ -33,6 +34,12 @@ export function Settings() {
   const [error, setError] = useState<ApiError | null>(null);
   const [savedNote, setSavedNote] = useState("");
   const [ci, setCi] = useState<ComplianceIndex | null>(null);  // v3.3 §6.C
+  // v3.4 red-team #9 — region-aware consent defaults
+  const [region, setRegion] = useState("GLOBAL");
+  const [regionNotice, setRegionNotice] = useState("");
+  const [regions, setRegions] = useState<RegionsView | null>(null);
+  const [effective, setEffective] =
+    useState<ConsentStateView["effective"]>({});
 
   const load = useCallback(async (uid: string) => {
     setError(null);
@@ -42,6 +49,9 @@ export function Settings() {
         api.complianceIndex().catch(() => null),
       ]);
       setConsent(c.purposes);
+      setRegion(c.region ?? "GLOBAL");
+      setRegionNotice(c.region_notice ?? "");
+      setEffective(c.effective ?? {});
       setLedgerOk(l.verification.chain_intact);
       setPrefs(p);
       if (index) setCi(index);
@@ -51,6 +61,19 @@ export function Settings() {
   }, []);
 
   useEffect(() => { load(userId); }, [userId, load]);
+  useEffect(() => {  // v3.4 — declared region catalogue, once
+    api.listRegions().then(setRegions).catch(() => null);
+  }, []);
+
+  const changeRegion = async (r: string) => {  // v3.4 red-team #9
+    setRegion(r);
+    try {
+      await api.setRegion(userId, r);
+      await load(userId);
+    } catch (e) {
+      setError(e as ApiError);
+    }
+  };
 
   const setConsentState = async (purpose: string, state: "granted" | "withdrawn") => {
     try {
@@ -143,6 +166,30 @@ export function Settings() {
         {/* ----------------------------- §5.3 privacy ------------------- */}
         <div className="card" aria-label="Privacy and consent">
           <h3 style={{ marginTop: 0 }}>🔏 Privacy & consent ledger</h3>
+          {/* v3.4 red-team #9 — region scopes DEFAULTS only; explicit ledger
+              decisions always win. The notice says so, in plain language. */}
+          <div className="region-row" style={{ marginBottom: 10 }}>
+            <label htmlFor="region-select" className="muted"
+                   style={{ fontSize: ".82rem" }}>
+              Region (scopes consent defaults):
+            </label>
+            <select id="region-select" className="field-input"
+                    value={region}
+                    onChange={e => changeRegion(e.target.value)}>
+              {regions
+                ? Object.entries(regions.regions).map(([code, r]) => (
+                    <option key={code} value={code}>
+                      {r.label}
+                    </option>
+                  ))
+                : <option value={region}>{region}</option>}
+            </select>
+            {regions && (
+              <span className="consent-origin region">
+                {regions.regions[region]?.mode ?? "opt-in"}
+              </span>
+            )}
+          </div>
           <p className="muted" style={{ marginTop: 0, fontSize: ".82rem" }}>
             Ledger integrity:{" "}
             {ledgerOk === null ? "checking…" : ledgerOk
@@ -152,12 +199,17 @@ export function Settings() {
           </p>
           {Object.entries(PURPOSE_LABEL).map(([purpose, label]) => {
             const state = consent[purpose] ?? "never_asked";
+            const eff = effective?.[purpose];
+            const fromRegion = eff?.origin === "region_default";
             return (
               <div key={purpose} className="consent-row">
                 <div>
                   <strong>{label}</strong>
                   <p className="muted" style={{ margin: "2px 0 0", fontSize: ".78rem" }}>
-                    {state === "never_asked" ? "never asked" : state}
+                    {fromRegion
+                      ? <>not asked yet — <span className="consent-origin region">
+                          region default: {eff.state}</span></>
+                      : (state === "never_asked" ? "never asked" : state)}
                   </p>
                 </div>
                 {state === "granted" ? (
@@ -174,6 +226,11 @@ export function Settings() {
               </div>
             );
           })}
+          {regionNotice && (
+            <p className="muted" style={{ fontSize: ".74rem", marginBottom: 6 }}>
+              {regionNotice}
+            </p>
+          )}
           <p className="caveat" style={{ marginBottom: 0 }}>
             Withdrawal is recorded as a new entry — past grants stay provable,
             nothing is deleted. Auditors verify the chain via{" "}

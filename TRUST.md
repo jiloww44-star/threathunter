@@ -121,6 +121,21 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 7. v3.4 Red-team hardening addendum
+
+- **Cortex crisis detection — blast radius: MEDIUM, review D2.** A false
+  positive could page the on-call (crisis fatigue); a false negative leaves
+  a real incident chatted away. Mitigations: conservative first-person
+  emergency phrase set, drill/tabletop suppression list, detection only
+  *surfaces the existing functional declaration pathway* (it never pretends
+  to respond itself), one safety event per session (no alert spam).
+- **Region-aware consent defaults — blast radius: MEDIUM, review D2.** A
+  wrong default could expose personal data. Mitigations: explicit ledger
+  entries always win; biometrics are opt-in in EVERY region; the effective
+  state's *origin* (ledger vs region default) is returned and rendered so
+  nothing is silently on; regions are a closed declared set with a plain-
+  language notice ("product choices, not legal advice").
+
 ## 6. v3.3 Sovereign Ops Node addendum
 
 - **`id_audit_l1` (VOYAGER) — blast radius: LOW-MEDIUM, review D2.** Read-only

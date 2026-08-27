@@ -871,3 +871,41 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+/* v3.4 red-team #3 — crisis signal from the cortex: pulsing attention chip
+   leading to the REAL pathway (functional declaration), never cosmetic. */
+.crisis-signal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-destructive);
+  background: color-mix(in srgb, var(--color-destructive) 12%, var(--color-surface));
+  box-shadow: 0 0 16px rgb(220 38 38 / .25);
+  animation: crisis-pulse 2.2s ease-in-out infinite;
+}
+.crisis-signal span { color: var(--color-text); font-size: var(--text-sm); }
+@keyframes crisis-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgb(220 38 38 / .2); }
+  50% { box-shadow: 0 0 22px rgb(220 38 38 / .5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crisis-signal { animation: none; }
+}
+
+/* v3.4 red-team #9 — region defaults badges in the Govern tab */
+.region-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.consent-origin {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-faint);
+}
+.consent-origin.region { border-color: var(--color-accent-2-bright);
+                         color: var(--color-accent-2-bright); }

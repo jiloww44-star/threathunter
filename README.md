@@ -73,6 +73,7 @@ cd backend && python -m pytest tests
 | **v3.1** §5.4 Access parity | `frontend/src/hooks/useBandwidth.ts` + Settings view — auto (Save-Data/2G) or manual low-bandwidth mode; JourneyMap degrades to a text-first risk strip |
 | **v3.2** Safety-by-design | UX review blockers closed: Plan Review gate (`/ops/plan`→`/approve`), Halt Execution (cooperative drain, HALTED states), report/data deletion, functional Incident Declaration (webhook-honest delivery), AUDITOR ethics gate (private-target + jailbreak refusals pre-decomposition), AI-output disclaimer everywhere, safety-event learning loop in KPIs — mapping: `design/Safety-Review-v3.2.md` |
 | **v3.3** Sovereign Ops Node (blueprint v5.2 "Tactical Swarm Edition") | Tactical HUD reskin (#020408 / lime #CFFF00 / teal #1A5454 / red #DC2626; Space Grotesk·Inter·JetBrains Mono), mobile bottom-nav, **Sovereign Data Stream** (`/ops/stream` — persisted audit rows + honestly-labelled live heartbeat pulses), **id_audit_l1** (`/privacy/id-audit` — VOYAGER L1 domain/carrier integrity, hedged PASS/REVIEW/FAIL, UNKNOWN ≠ PASS), identity-intel RGD fan-out (HUNTER→VOYAGER→AUDITOR with identifier-first entity extraction), **4-step onboarding wizard**, **Govern tab** with transparent **Compliance Index** (`/privacy/compliance-index`, 4×25 indicator — not a certification) — mapping: `design/SovereignOps-v5.2.md` |
+| **v3.4** Red-team hardening (deferrals #3/#9) | **Cortex crisis-signal detection**: live-incident language prepends an honest notice, returns a `declare_incident` action hint (one-click pathway, never cosmetic), drills/tabletop phrasing suppressed; logged to the safety learning loop once per session. **Region-aware consent defaults**: declared region catalogue (GLOBAL/EU_UK/NG opt-in · US opt-out), explicit ledger entries always win, biometrics stay opt-in in every region, effective state + origin shown honestly in the Govern tab; personalization gate reads the effective state. **VOYAGER API schema**: `docs/api/VOYAGER.md` — full function/governance/degradation contract |
 
 ## Repo layout
 
@@ -87,9 +88,9 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
   app/store/       evidence/signals/hypotheses/checks/review_queue +
                     v3.0 ops_trees/ops_tasks/notifications/audit_trail/
                     custom_agents/journey_watches
-  tests/           141 tests (engine / journey / kyc / API / geo / governance /
+  tests/           162 tests (engine / journey / kyc / API / geo / governance /
                     sovereign-fusion / privacy-personalization /
-                    safety-by-design suites)
+                    safety-by-design / sovereign-ops / v3.4-hardening suites)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)

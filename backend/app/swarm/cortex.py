@@ -76,8 +76,8 @@ def _reply_text(report: dict) -> str:
             f"Confidence: {conf}. {act}".strip())
 
 
-async def chat(store: EvidenceStore, session_id: str, message: str
-               ) -> dict:
+async def _chat_inner(store: EvidenceStore, session_id: str, message: str
+                      ) -> dict:
     s = _session(session_id)
     text = (message or "").strip()
     lower = text.lower()
@@ -181,3 +181,70 @@ def purge_session(session_id: str) -> int:
     of waiting for the 1h TTL (§25 minimization on demand)."""
     s = _SESSIONS.pop(session_id, None)
     return len([k for k in (s or {}) if s.get(k)])
+
+
+# ---------------------------------------------------------------------------
+# v3.4 — crisis-signal detection (red-team review #3: crisis pathways must be
+# real, not cosmetic — and the cortex must RECOGNISE crisis language instead
+# of calmly continuing a routine conversation).
+# ---------------------------------------------------------------------------
+
+# Live, first-person emergency language. Deliberately conservative: intel
+# vocabulary like "breach report" or "data leak check" is NOT here.
+_CRISIS_PHRASES = (
+    "we are under attack", "we're under attack", "under active attack",
+    "we've been breached", "we have been breached", "we've been hacked",
+    "we have been hacked", "just got breached", "ransomware hit",
+    "hit by ransomware", "ransomware on our", "intrusion in progress",
+    "attack in progress", "ongoing attack", "data is being exfiltrated",
+    "being exfiltrated", "active incident right now", "security emergency",
+    "emergency right now", "this is an emergency", "we are offline",
+    "systems are down", "help us now", "need help immediately",
+    "compromised right now", "as we speak",
+)
+
+# Scenario/tabletop phrasing suppresses the signal — a drill must not page
+# the on-call (false crisis security cuts both ways, review risk 3).
+_CRISIS_SUPPRESS = ("what if", "hypothetical", "hypothetically", "scenario",
+                    "imagine", "tabletop", "drill", "exercise", "training",
+                    "for a story", "in a movie")
+
+
+def detect_crisis(text: str) -> str | None:
+    """Return the matched crisis phrase, or None. Pure function — the wrapper
+    decides what to do with it."""
+    lower = (text or "").lower()
+    if any(k in lower for k in _CRISIS_SUPPRESS):
+        return None
+    for p in _CRISIS_PHRASES:
+        if p in lower:
+            return p
+    return None
+
+
+_CRISIS_NOTICE = (
+    "⚠ This sounds like a LIVE incident. If you are in crisis: use the "
+    "Crisis Override (Declare Incident) — it notifies on-call honestly, "
+    "locks down the workspace and opens the response checklist. I'll keep "
+    "assisting below, but declared incidents take priority over chat.")
+
+
+async def chat(store: EvidenceStore, session_id: str, message: str
+               ) -> dict:
+    """Crisis-aware wrapper around the dialogue engine: normal conversation
+    keeps flowing, but crisis language (1) prepends an honest notice, (2)
+    returns a `crisis` action hint so the UI can surface the real pathway,
+    and (3) feeds the safety learning loop ONCE per session."""
+    s = _session(session_id)
+    phrase = detect_crisis(message)
+    resp = await _chat_inner(store, session_id, message)
+    if phrase:
+        resp["text"] = f"{_CRISIS_NOTICE}\n\n{resp['text']}"
+        resp["crisis"] = {"phrase": phrase, "action": "declare_incident"}
+        if not s.get("_crisis_logged"):
+            from . import safety
+            safety.log_event(store, "crisis_signal_detected",
+                             actor=session_id,
+                             detail=f"crisis phrase '{phrase}' in cortex chat")
+            s["_crisis_logged"] = s["_touched"]
+    return resp

@@ -3,8 +3,8 @@ import type {
   AgentInfo, AnalyticsSummary, ComplianceIndex, ConsentLedgerView,
   ConsentStateView, CortexReply, FactCheckResponse, GraphData, IdAuditResult,
   Incident, JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
-  OpsNotification, PlanProposal, Prefs, RecentCheck, Statistics, StrategyMap,
-  StreamResponse, TreeSummary, UnifiedReport,
+  OpsNotification, PlanProposal, Prefs, RecentCheck, RegionsView, Statistics,
+  StrategyMap, StreamResponse, TreeSummary, UnifiedReport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -108,6 +108,14 @@ export const api = {
   consentState: (userId: string) =>
     request<ConsentStateView>(`/api/v1/privacy/consent/${userId}`),
   consentLedger: () => request<ConsentLedgerView>("/api/v1/privacy/ledger"),
+  /* v3.4 red-team #9 — region-aware consent defaults */
+  listRegions: () => request<RegionsView>("/api/v1/privacy/regions"),
+  setRegion: (userId: string, region: string) =>
+    request<{ user_id: string; region: string; mode: string; notice: string }>(
+      "/api/v1/privacy/region", {
+        method: "PUT",
+        body: JSON.stringify({ user_id: userId, region }),
+      }),
   getPrefs: (userId: string) => request<Prefs>(`/api/v1/prefs/${userId}`),
   savePrefs: (userId: string, patch: Partial<Prefs>) =>
     request<Prefs>(`/api/v1/prefs/${userId}`, {

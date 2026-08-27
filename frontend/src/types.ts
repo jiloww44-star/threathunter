@@ -306,3 +306,29 @@ export interface MeshStatus {
   failovers: number;
   policy_version: string;
 }
+
+// --------------- §5.3 consent ledger + §3.4 personalization ----------------
+export interface ConsentStateView {
+  user_id: string;
+  purposes: Record<string, string>; // purpose -> granted | withdrawn | never_asked
+  ledger: Array<{
+    id: string; user_id: string; purpose: string; state: string;
+    detail: string; entry_hash: string; created_at: string;
+  }>;
+}
+
+export interface ConsentLedgerView {
+  verification: { entries: number; chain_intact: boolean; note: string };
+  entries: ConsentStateView["ledger"];
+  purposes: string[];
+}
+
+export interface Prefs {
+  user_id: string;
+  watchlists: string[];
+  journey_priority: string;
+  notify_tolerance: string;
+  output_format: string;
+  consent: string;
+  source: "defaults" | "stored";
+}

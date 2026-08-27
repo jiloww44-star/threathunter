@@ -134,13 +134,18 @@ async def reassess_open_checks(store: EvidenceStore, limit: int = 10
 
 
 async def reassess_all(store: EvidenceStore) -> dict:
-    """The full §1.10 loop — watches (VOYAGER) + open hypotheses (engine)."""
+    """The full §1.10 loop — watches (VOYAGER) + open hypotheses (engine)
+    + saved entity watchlists (§3.4 personalization drift alerts)."""
     from ..swarm.agents import voyager
+    from . import personalization
     watch_notes = voyager.reassess_watches(store)
     check_notes = await reassess_open_checks(store)
+    watchlist_notes = personalization.reassess_watchlists(store)
     return {"watch_notifications": watch_notes,
             "verdict_notifications": check_notes,
-            "emitted": len(watch_notes) + len(check_notes)}
+            "watchlist_notifications": watchlist_notes,
+            "emitted": (len(watch_notes) + len(check_notes)
+                        + len(watchlist_notes))}
 
 
 def reassess_after_ingest(store: EvidenceStore) -> None:
@@ -152,6 +157,11 @@ def reassess_after_ingest(store: EvidenceStore) -> None:
         voyager.reassess_watches(store)
     except Exception as exc:
         log.warning("watch reassessment failed (non-fatal): %s", exc)
+    try:
+        from . import personalization
+        personalization.reassess_watchlists(store)
+    except Exception as exc:
+        log.warning("watchlist reassessment failed (non-fatal): %s", exc)
     try:
         import asyncio
         loop = asyncio.get_event_loop()

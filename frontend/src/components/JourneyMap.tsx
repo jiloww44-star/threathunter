@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { JourneySegmentRisk, RiskLevel } from "../types";
+import { isLowBandwidth } from "../hooks/useBandwidth";
 
 const SEVERITY_COLOR: Record<string, string> = {
   HIGH: "#ef4444", CRITICAL: "#b91c1c", MODERATE: "#f59e0b",
@@ -20,8 +21,11 @@ interface Props {
 export function JourneyMap({ geometry, segments, dataMode }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const lowBandwidth = isLowBandwidth();  // §5.4 text-first degraded mode
 
   useEffect(() => {
+    if (lowBandwidth) return;  // never mount the tile map on metered links
+    if (!ref.current) return;
     if (!ref.current) return;
     if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
 
@@ -72,6 +76,35 @@ export function JourneyMap({ geometry, segments, dataMode }: Props) {
 
     return () => { map.remove(); mapRef.current = null; };
   }, [geometry, segments]);
+
+  if (lowBandwidth) {
+    // §5.4 — text-first Strategy Map equivalent for the journey corridor:
+    // the same data, zero tile traffic, full accessibility.
+    return (
+      <div className="graph-wrap low-bandwidth-strip" role="img"
+           aria-label="Journey risk summary (text mode, low-bandwidth)">
+        <ol className="timeline" role="list">
+          {segments.map((s, i) => (
+            <li key={i} className={`risk-${s.risk}`}>
+              <time>{s.time}</time>
+              <strong>{s.segment}</strong>
+              <span className={`badge ${s.risk.toLowerCase()}`}>{s.risk}</span>
+              <p className="why">
+                {s.incident_count
+                  ? `${s.incident_count} recent report(s) · max ${s.max_severity}`
+                  : "no recent reports"}
+              </p>
+            </li>
+          ))}
+        </ol>
+        <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+          Map tiles skipped — low-bandwidth mode (§5.4). The full risk
+          timeline below carries the same information. Change in Settings →
+          Access.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="graph-wrap">

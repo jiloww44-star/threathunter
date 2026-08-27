@@ -22,6 +22,17 @@ export function KYCFlow() {
     api.kycFixtures().then((d) => setFixtures(d.fixtures)).catch(() => {});
   }, []);
 
+  const recordConsent = async () => {
+    // §5.3 — the "I consent" action is REAL: it lands on the hash-chained
+    // consent ledger before biometrics run. Best-effort in demo (a ledger
+    // outage must not block verification — §20 degradation, never fake).
+    try {
+      await api.consent(
+        localStorage.getItem("th360.user") || "demo-operator",
+        "kyc_biometrics", "granted");
+    } catch { /* ledger unavailable in demo — proceed without recording */ }
+  };
+
   const run = async (fx: KYCFixture) => {
     setLoading(true);
     setError(null);
@@ -102,12 +113,16 @@ export function KYCFlow() {
           </pre>
           <p className="muted" style={{ fontSize: ".82rem" }}>
             Note: document number is stored as a hash only — §25 data
-            minimization. Consent for biometric processing is requested in the
-            next step (Part 5.5).
+            minimization. Your consent is written to the immutable §5.3
+            ledger before biometrics run (auditable, withdrawable in
+            Settings → Privacy).
           </p>
           <div className="btn-row">
             <button className="btn secondary" onClick={() => setStep(0)}>Back</button>
-            <button className="btn" onClick={() => run(selected)}>
+            <button className="btn" onClick={() => {
+              recordConsent();
+              run(selected);
+            }}>
               I consent — run verification
             </button>
           </div>

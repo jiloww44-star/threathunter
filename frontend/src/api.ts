@@ -1,9 +1,9 @@
 // API client — relative paths only; the Vite dev proxy forwards /api → :8000
 import type {
-  AgentInfo, AnalyticsSummary, CortexReply, FactCheckResponse, GraphData,
-  JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
-  OpsNotification, RecentCheck, Statistics, StrategyMap, TreeSummary,
-  UnifiedReport,
+  AgentInfo, AnalyticsSummary, ConsentLedgerView, ConsentStateView,
+  CortexReply, FactCheckResponse, GraphData, JourneyResponse, KYCResponse,
+  KYCFixture, MeshStatus, OpsKpis, OpsNotification, Prefs, RecentCheck,
+  Statistics, StrategyMap, TreeSummary, UnifiedReport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -97,6 +97,22 @@ export const api = {
   opsReassess: () =>
     request<{ emitted: number }>("/api/v1/ops/reassess", { method: "POST" }),
   opsKpis: () => request<OpsKpis>("/api/v1/ops/kpis"),
+
+  // ---- §5.3 consent ledger + §3.4 personalization ----
+  consent: (userId: string, purpose: string, state: "granted" | "withdrawn") =>
+    request<{ entry_id: string }>("/api/v1/privacy/consent", {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, purpose, state }),
+    }),
+  consentState: (userId: string) =>
+    request<ConsentStateView>(`/api/v1/privacy/consent/${userId}`),
+  consentLedger: () => request<ConsentLedgerView>("/api/v1/privacy/ledger"),
+  getPrefs: (userId: string) => request<Prefs>(`/api/v1/prefs/${userId}`),
+  savePrefs: (userId: string, patch: Partial<Prefs>) =>
+    request<Prefs>(`/api/v1/prefs/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
 };
 
 export interface ApiError {

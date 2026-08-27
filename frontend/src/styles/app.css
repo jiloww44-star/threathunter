@@ -632,3 +632,39 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
   .chat-log { scroll-behavior: auto; }
   .chat-msg, .task-item { transition: none; }
 }
+
+/* ========= §5.3/§3.4/§5.4 — Settings, consent rows, low-bandwidth mode === */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px; align-items: start; margin-top: 18px;
+}
+.consent-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10px 0;
+  border-bottom: 1px solid var(--color-border, #2a3a4d);
+}
+.consent-row:last-of-type { border-bottom: none; }
+.consent-row .demo-btn { min-width: 96px; }
+
+.chip-editor { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chip-editor .chip { display: inline-flex; align-items: center; gap: 6px; }
+.chip-editor .chip button {
+  background: none; border: none; color: inherit; cursor: pointer;
+  font: inherit; padding: 0 2px; min-height: 0;
+}
+.chip-editor .chip button:hover { color: var(--color-accent); }
+
+/* Low-bandwidth mode (§5.4): attribute-driven, text-first, zero decoration */
+.low-bandwidth-strip { border: 1px dashed var(--color-border, #2a3a4d);
+  border-radius: 12px; padding: 12px; }
+[data-bandwidth="low"] .card,
+[data-bandwidth="low"] .result-card,
+[data-bandwidth="low"] .roster-card,
+[data-bandwidth="low"] .kpi { box-shadow: none !important; }
+[data-bandwidth="low"] .topbar { backdrop-filter: none; }
+[data-bandwidth="low"] *, [data-bandwidth="low"] *::before,
+[data-bandwidth="low"] *::after {
+  animation-duration: .01ms !important;
+  transition-duration: .01ms !important;
+}

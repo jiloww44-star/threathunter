@@ -146,9 +146,16 @@ capability; the trust posture tightens accordingly:
    reassessment loop only *notifies*; it never edits history. Prior verdicts
    remain in the checks table; the notification body records the old outcome
    and the reason for the change.
-5. **Personalization shapes presentation, never conclusions (§3.4).** The
-   only personalized knob shipped (journey watch `tolerance`) gates
-   *notifications*, and response payloads state this explicitly.
+5. **Personalization shapes presentation, never conclusions (§3.4).** Shipped
+   surface (v3.1): saved entity watchlists, journey-priority/alert-threshold/
+   output-format defaults. Enforcement is CI-level — opposing preference
+   profiles produce byte-identical verdict/risk output
+   (`test_privacy_personalization.py::TestPresentationNeverConclusions`).
+6. **Consent is provable (§5.3, v3.1).** The consent ledger is append-only
+   and hash-chained; writes require no trust because tampering breaks the
+   chain (`verify_chain()`), withdrawal is a new entry (history kept), and
+   personalization writes are refused with classified `CONSENT_REQUIRED`
+   unless the grant exists — nothing is stored silently.
 
 ---
 

@@ -51,7 +51,8 @@ class WatchRequest(BaseModel):
     destination: str
     departure_time: str | None = None
     priority: str = "balanced"
-    tolerance: str = "MODERATE"   # §3.4 notification threshold only
+    tolerance: str | None = None  # §3.4 defaults to user's preference
+    user_id: str | None = None    # §3.4 personalization (presentation only)
 
 
 @router.post("/ops/goal")
@@ -148,12 +149,20 @@ async def reassess(db=Depends(get_db)):
 @router.post("/ops/journey/watch")
 async def start_watch(req: WatchRequest, db=Depends(get_db)):
     from datetime import datetime
+    from ...core import personalization
     dep = None
     if req.departure_time:
         dep = datetime.fromisoformat(req.departure_time)
-    return voyager.monitor_active_journey(
+    # §3.4 — threshold default comes from the user's preferences when no
+    # explicit tolerance is passed. Preferences gate ALERTS, never scores.
+    tolerance = req.tolerance or personalization.default_watch_tolerance(
+        db, req.user_id)
+    out = voyager.monitor_active_journey(
         db, origin=req.origin, destination=req.destination,
-        departure_time=dep, priority=req.priority, tolerance=req.tolerance)
+        departure_time=dep, priority=req.priority, tolerance=tolerance)
+    out["tolerance_source"] = ("preference" if not req.tolerance and
+                               req.user_id else "explicit/default")
+    return out
 
 
 @router.get("/ops/journey/watches")

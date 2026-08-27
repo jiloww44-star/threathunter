@@ -68,6 +68,9 @@ cd backend && python -m pytest tests
 | **v3.0** §3.2/§1.10 Trust Layer | `backend/app/core/trust_layer.py` — shared evidence graph, global contradiction monitor, label separation (§26), continual reassessment → verdict/risk-change notifications (wired post-ingest, §20-guarded) |
 | **v3.0** A-14/§5.2 governance | `backend/app/swarm/registry.py` — function allowlists architectural; SDK custom agents admitted via AUDITOR gate into SHADOW mode until human promotion |
 | **v3.0** A-01/A-15 Ops Node | `frontend/src/views/OpsNode.tsx` — Cortex chat, Strategy Map, Swarm Timeline/Task Matrix, verdict-change alerts, Intel Feed (v1 §3 restored), Sovereign KPIs (§3.3 metrics) |
+| **v3.1** §5.3 Consent ledger | `backend/app/core/privacy.py` — hash-chained, append-only consent log (tamper-evident, auditor-verifiable); KYC consent is a real ledger write; `routes/privacy.py` |
+| **v3.1** §3.4 Personalization | `backend/app/core/personalization.py` — consent-gated watchlists/priority/tolerance/format; CI-enforced rule: presentation & alerts only, never verdict/risk (§5.5 TRUST.md) |
+| **v3.1** §5.4 Access parity | `frontend/src/hooks/useBandwidth.ts` + Settings view — auto (Save-Data/2G) or manual low-bandwidth mode; JourneyMap degrades to a text-first risk strip |
 
 ## Repo layout
 
@@ -82,8 +85,8 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
   app/store/       evidence/signals/hypotheses/checks/review_queue +
                     v3.0 ops_trees/ops_tasks/notifications/audit_trail/
                     custom_agents/journey_watches
-  tests/           96 tests (engine / journey / kyc / API / geo / governance /
-                    sovereign-fusion suites)
+  tests/           106 tests (engine / journey / kyc / API / geo / governance /
+                    sovereign-fusion / privacy-personalization suites)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)
@@ -95,10 +98,13 @@ docker-compose.yml Production topology (api/worker/beat/db/redis)
 ## v3.0 SOVEREIGN FUSION (upgrade spec → this build)
 
 Master spec: [`ThreatHunter360 v3.0 — SOVEREIGN FUSION Upgrade Specification.md`](ThreatHunter360%20v3.0%20—%20SOVEREIGN%20FUSION%20Upgrade%20Specification.md).
-Release plan §8 status in this build: **P1 Foundations ✅ · P2 Restoration ✅ ·
-P3 Intelligence ✅ · P4 — SDK shadow-mode ✅; privacy/a11y parity partially
-(policies in TRUST.md; a11y budget in UI v2 tokens); hyperscale certification
-remains a production-phase item.**
+Release plan §8 status: **P1 ✅ · P2 ✅ · P3 ✅ (incl. the §3.4
+personalization layer — consent-gated, watchlist drift alerts, CI-enforced
+"presentation never conclusions") · P4: SDK shadow-mode ✅, privacy
+completion ✅ (§5.3 hash-chained consent ledger), a11y parity ✅ (§5.4
+low-bandwidth text-first mode + reduced-motion budget); hyperscale
+certification remains a production-phase item. Design/audit notes for the
+v3.1 tranche: [`design/Product-Audit-v3.1.md`](design/Product-Audit-v3.1.md).**
 
 Try it (Ops Node → #/ops):
 

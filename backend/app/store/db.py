@@ -192,6 +192,28 @@ CREATE TABLE IF NOT EXISTS journey_watches (   -- VOYAGER monitor_active_journey
     created_at TEXT,
     updated_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS user_preferences (   -- §3.4 personalization layer
+    user_id TEXT PRIMARY KEY,
+    watchlists_json TEXT DEFAULT '[]',   -- saved entity watchlists (v1 §22)
+    journey_priority TEXT DEFAULT 'balanced',     -- presentation default only
+    notify_tolerance TEXT DEFAULT 'MODERATE',     -- alert threshold default
+    output_format TEXT DEFAULT 'novice',          -- novice | analyst (§19)
+    watchlist_state_json TEXT DEFAULT '{}',       -- entity -> signal count seen
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS consent_ledger (     -- §5.3 immutable consent log
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    purpose TEXT,           -- kyc_biometrics | personalization | journey_history | analytics
+    state TEXT,             -- granted | withdrawn
+    detail TEXT,
+    prev_hash TEXT,         -- hash chain: tamper-evidence (immutable, auditable)
+    entry_hash TEXT,
+    created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_consent_user ON consent_ledger(user_id, purpose);
 """
 
 
@@ -955,6 +977,91 @@ class EvidenceStore:
                     "UPDATE journey_watches SET status=?, updated_at=? "
                     "WHERE watch_id=?", (status, _now(), watch_id))
             self._conn.commit()
+
+    # ------------------------- §3.4 personalization (presentation only) ----
+    def get_prefs(self, user_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM user_preferences WHERE user_id=?",
+                (user_id,)).fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        d["watchlists"] = json.loads(d.pop("watchlists_json") or "[]")
+        d["watchlist_state"] = json.loads(
+            d.pop("watchlist_state_json") or "{}")
+        return d
+
+    def upsert_prefs(self, user_id: str, *, watchlists: list[str],
+                     journey_priority: str, notify_tolerance: str,
+                     output_format: str,
+                     watchlist_state: dict | None = None):
+        existing = self.get_prefs(user_id)
+        state = watchlist_state if watchlist_state is not None else (
+            existing or {}).get("watchlist_state", {})
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO user_preferences(user_id, watchlists_json,
+                       journey_priority, notify_tolerance, output_format,
+                       watchlist_state_json, updated_at)
+                   VALUES (?,?,?,?,?,?,?)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     watchlists_json=excluded.watchlists_json,
+                     journey_priority=excluded.journey_priority,
+                     notify_tolerance=excluded.notify_tolerance,
+                     output_format=excluded.output_format,
+                     watchlist_state_json=excluded.watchlist_state_json,
+                     updated_at=excluded.updated_at""",
+                (user_id, json.dumps(watchlists), journey_priority,
+                 notify_tolerance, output_format, json.dumps(state), _now()))
+            self._conn.commit()
+
+    def update_watchlist_state(self, user_id: str, state: dict):
+        with self._lock:
+            self._conn.execute(
+                "UPDATE user_preferences SET watchlist_state_json=?, "
+                "updated_at=? WHERE user_id=?",
+                (json.dumps(state), _now(), user_id))
+            self._conn.commit()
+
+    def all_prefs(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT user_id FROM user_preferences"
+                                      ).fetchall()
+        return [self.get_prefs(r[0]) for r in rows]
+
+    # ------------------------- §5.3 consent ledger (append-only chain) ----
+    def consent_append(self, entry_id: str, user_id: str, purpose: str,
+                       state: str, detail: str, prev_hash: str,
+                       entry_hash: str):
+        """Append-only: callers compute the hash chain in core/privacy.py.
+        No UPDATE/DELETE path exists for this table by design (immutable)."""
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO consent_ledger(id, user_id, purpose, state,
+                       detail, prev_hash, entry_hash, created_at)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (entry_id, user_id, purpose, state, detail, prev_hash,
+                 entry_hash, _now()))
+            self._conn.commit()
+
+    def consent_ledger(self, user_id: str | None = None,
+                       limit: int = 200) -> list[dict]:
+        sql = "SELECT * FROM consent_ledger"
+        args: tuple = ()
+        if user_id:
+            sql += " WHERE user_id=?"
+            args = (user_id,)
+        sql += " ORDER BY rowid LIMIT ?"
+        rows = self._conn.execute(sql, (*args, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def consent_latest_hash(self) -> str:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT entry_hash FROM consent_ledger ORDER BY rowid DESC "
+                "LIMIT 1").fetchone()
+        return r[0] if r else "GENESIS"
 
     # ------------------------------------------------------- maintenance --
     def expire_raw_content(self, retention_days: int):

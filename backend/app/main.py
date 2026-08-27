@@ -15,7 +15,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api.routes import admin, factcheck, feed, graph, journey, kyc, ops, voice
+from .api.routes import (admin, factcheck, feed, graph, journey, kyc, ops,
+                         privacy, voice)
 from .core.errors import ERROR_MAP, PipelineError
 from .store.db import get_store
 
@@ -97,5 +98,6 @@ async def root():
     }
 
 
-for module in (factcheck, journey, kyc, feed, graph, voice, admin, ops):
+for module in (factcheck, journey, kyc, feed, graph, voice, admin, ops,
+               privacy):
     app.include_router(module.router)

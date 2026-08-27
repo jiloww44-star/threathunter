@@ -65,4 +65,19 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "The governance operation cannot proceed",
         "Register the agent via the SDK endpoint first (§5.2)",
     ),
+    "CONSENT_REQUIRED": (  # §5.3 privacy completion
+        "Consent is required for this data use",
+        "Your preferences were NOT saved — nothing was stored silently",
+        "Grant the named purpose in Settings → Privacy, then retry",
+    ),
+    "INVALID_PREFERENCE": (
+        "A preference value is outside its allowed range",
+        "The change was not applied",
+        "Pick one of the listed allowed values",
+    ),
+    "INVALID_CONSENT": (
+        "The consent record is not valid",
+        "Consent was not recorded",
+        "Use a declared purpose and state 'granted' or 'withdrawn'",
+    ),
 }

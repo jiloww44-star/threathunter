@@ -23,7 +23,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ...api.deps import get_db
-from ...core import trust_layer
+from ...core import agent_inventory as agent_inventory_mod
+from ...core import approvals, trust_layer
 from ...core.errors import PipelineError
 from ...swarm import cortex, incident, pathfinder, registry
 from ...swarm.agents import auditor, voyager
@@ -222,24 +223,78 @@ async def register_custom(req: CustomAgentRequest, db=Depends(get_db)):
 @router.post("/ops/agents/custom/{agent_id}/promote")
 async def promote_custom(agent_id: str, db=Depends(get_db)):
     """§5.2: promotion is an external-effect governance action — AUTH'd via
-    AUDITOR (REQUIRE_HUMAN), and the human's decision is on the trail."""
+    AUDITOR (REQUIRE_HUMAN), and the human's decision is on the trail.
+    v4.2: runs THROUGH the approval engine — an ApprovalRequested +
+    ApprovalGranted pair is minted for every promotion; the effect
+    (status flip) executes only from the grant hook."""
     agent = db.get_custom_agent(agent_id)
     if not agent:
         raise PipelineError("AGENT_NOT_FOUND", status=404)
     auth = auditor.authorize_action(db, actor="operator",
                                     action="promote_custom_agent",
                                     detail=f"promote {agent_id} to ACTIVE")
-    # The operator calling this endpoint IS the human in the loop (R-05).
-    db.update_custom_agent(agent_id, status="ACTIVE",
-                           drift_notes=(agent.get("drift_notes") or "")
-                           + f" | promoted by operator; auth={auth['decision']}")
-    db.notify(kind="GOVERNANCE",
-              title=f"Custom agent promoted: {agent['name']}",
-              body=f"{agent_id} moved SHADOW → ACTIVE by an operator. "
-                   f"Shadow trees observed: {agent.get('shadow_tree_count', 0)}.",
-              ref=agent_id)
+
+    def _effect(row):  # executes ONLY on the grant hook (never on reject)
+        db.update_custom_agent(
+            agent_id, status="ACTIVE",
+            drift_notes=(agent.get("drift_notes") or "")
+            + f" | promoted by operator; auth={auth['decision']}; "
+              f"approval={row['id']}")
+        db.notify(kind="GOVERNANCE",
+                  title=f"Custom agent promoted: {agent['name']}",
+                  body=f"{agent_id} moved SHADOW → ACTIVE by an operator. "
+                       f"Shadow trees observed: "
+                       f"{agent.get('shadow_tree_count', 0)}.",
+                  ref=agent_id)
+
+    # The operator calling this endpoint IS the human in the loop (R-05) —
+    # one call, but the request/grant pair is two distinct on-trail events.
+    approval = approvals.request_and_decide(
+        db, kind="promote_custom_agent", subject_ref=agent_id,
+        summary=f"promote {agent_id} SHADOW → ACTIVE", actor="operator",
+        context={"shadow_tree_count": agent.get("shadow_tree_count", 0),
+                 "auditor_decision": auth["decision"]},
+        on_approval=_effect)
     return {"agent_id": agent_id, "status": "ACTIVE",
-            "audit": auth}
+            "audit": auth, "approval": approval}
+
+
+# --------------------------------- v4.2 governance planes (§73 V2) --------
+@router.get("/ops/approvals")
+async def list_approvals(status: str | None = None, limit: int = 50,
+                         db=Depends(get_db)):
+    """Approval engine queue — the durable surface for REQUIRE_HUMAN
+    policy decisions (§27/R-05)."""
+    return {"approvals": db.approval_list(status=status, limit=limit)}
+
+
+class ApprovalDecision(BaseModel):
+    decided_by: str = "operator"
+
+
+@router.post("/ops/approvals/{approval_id}/approve")
+async def approve(approval_id: str, req: ApprovalDecision,
+                  db=Depends(get_db)):
+    """§26 ApprovalGranted. Effects: only kinds the engine knows how to
+    execute are wired (promotions execute from the promote flow itself)."""
+    return approvals.decide(db, approval_id, approved=True,
+                            decided_by=req.decided_by)
+
+
+@router.post("/ops/approvals/{approval_id}/reject")
+async def reject(approval_id: str, req: ApprovalDecision,
+                 db=Depends(get_db)):
+    """Rejection — the effect NEVER ran, and that fact is on the trail."""
+    return approvals.decide(db, approval_id, approved=False,
+                            decided_by=req.decided_by)
+
+
+@router.get("/ops/agents/inventory")
+async def agent_inventory(db=Depends(get_db)):
+    """V2 agent supply chain: per-node cards (owner/version/source/
+    publisher/permissions/credentials/trust/last reviewed/known issue/
+    runtime exposure/data classification) + NIST-RMF readiness summary."""
+    return agent_inventory_mod.inventory(db)
 
 
 @router.post("/cortex/chat")

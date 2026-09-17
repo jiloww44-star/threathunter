@@ -138,6 +138,49 @@ export interface LockerResponse {
   note: string;
 }
 
+// ---------------------------------------------- v4.2 governance planes V2
+export interface ApprovalRecord {
+  id: string;
+  kind: string;          // promote_custom_agent | patch_apply | ...
+  subject_ref: string;
+  summary: string;
+  requester: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  decided_by?: string | null;
+  decided_at?: string | null;
+  context: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AgentInventoryCard {
+  agent_id: string;
+  name: string;
+  owner: string;
+  version: string;
+  source: string;
+  publisher: string;
+  permissions: { api_functions: string[]; read_only_functions: string[] };
+  credentials: string;
+  trust_status: "TRUSTED" | "OBSERVED" | "QUARANTINED";
+  last_reviewed: string;
+  known_issue: string;
+  runtime_exposure: string;
+  data_classification: string;
+  blast_radius_note: string;
+  native: boolean;
+  status: string;
+}
+
+export interface AgentInventoryResponse {
+  generated_at: string;
+  agents: AgentInventoryCard[];
+  dependency_graph: { edges: Array<{ from: string; to: string; kind: string;
+    note?: string }>; note: string };
+  readiness: { govern: string; map: string; measure: string; manage: string };
+  honest_limits: string;
+  policy_version: string;
+}
+
 export interface JourneySegmentRisk {
   time: string;
   segment: string;

@@ -241,6 +241,19 @@ CREATE TABLE IF NOT EXISTS investigation_links ( -- §5 evidence chain linkage
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS approvals (          -- v4.2 §26 approval engine
+    id TEXT PRIMARY KEY,
+    kind TEXT,         -- e.g. promote_custom_agent, patch_apply
+    subject_ref TEXT,  -- what the approval governs (agent id, cve id, ...)
+    summary TEXT,
+    requester TEXT,
+    status TEXT DEFAULT 'PENDING',   -- PENDING | APPROVED | REJECTED
+    decided_by TEXT,
+    decided_at TEXT,
+    context_json TEXT DEFAULT '{}',
+    created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS declared_incidents (  -- functional crisis pathway
     incident_id TEXT PRIMARY KEY,
     severity TEXT,          -- SEV1 | SEV2 | SEV3
@@ -1264,6 +1277,69 @@ class EvidenceStore:
                    WHERE investigation_id=? ORDER BY created_at""",
                 (inv_id,)).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------- v4.2 approval engine (§26) ------------------
+    def approval_create(self, approval_id: str, kind: str, subject_ref: str,
+                        summary: str, requester: str, context_json: str,
+                        auto_decide: tuple[str, str] | None = None):
+        with self._lock:
+            if auto_decide is None:
+                self._conn.execute(
+                    """INSERT INTO approvals(id, kind, subject_ref, summary,
+                           requester, status, context_json, created_at)
+                       VALUES (?,?,?,?,?, 'PENDING', ?, ?)""",
+                    (approval_id, kind, subject_ref, summary, requester,
+                     context_json, _now()))
+            else:
+                self._conn.execute(
+                    """INSERT INTO approvals(id, kind, subject_ref, summary,
+                           requester, status, decided_by, decided_at,
+                           context_json, created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (approval_id, kind, subject_ref, summary, requester,
+                     auto_decide[0], auto_decide[1], _now(), context_json,
+                     _now()))
+            self._conn.commit()
+
+    def approval_get(self, approval_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM approvals WHERE id=?",
+                (approval_id,)).fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        d["context"] = json.loads(d.pop("context_json", None) or "{}")
+        return d
+
+    def approval_list(self, status: str | None = None,
+                      limit: int = 50) -> list[dict]:
+        with self._lock:
+            sql = "SELECT * FROM approvals"
+            args: tuple = ()
+            if status:
+                sql += " WHERE status=?"
+                args = (status,)
+            sql += " ORDER BY created_at DESC LIMIT ?"
+            rows = self._conn.execute(sql, (*args, limit)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["context"] = json.loads(d.pop("context_json", None) or "{}")
+            out.append(d)
+        return out
+
+    def approval_decide(self, approval_id: str, status: str,
+                        decided_by: str):
+        """Atomic-ish PENDING→decided transition; returns rows changed so
+        double-decides surface as 0 (409 to the caller, never silent)."""
+        with self._lock:
+            cur = self._conn.execute(
+                """UPDATE approvals SET status=?, decided_by=?, decided_at=?
+                   WHERE id=? AND status='PENDING'""",
+                (status, decided_by, _now(), approval_id))
+            self._conn.commit()
+            return cur.rowcount
 
     # ------------------------- §5.3 consent ledger (append-only chain) ----
     def consent_append(self, entry_id: str, user_id: str, purpose: str,

@@ -34,7 +34,7 @@ interface ChatMsg {
 }
 
 type Pane = "strategy" | "timeline" | "alerts" | "feed" | "kpis" | "stream"
-  | "cases" | "locker";
+  | "cases" | "locker" | "governance";
 
 /** v4.0 §2 subject types — mirrors backend core.investigation.SUBJECT_TYPES */
 const SUBJECT_TYPES = ["person", "organization", "domain", "ip", "url",
@@ -87,6 +87,11 @@ export function OpsNode() {
   // v4.1 — §73 V1 Evidence Locker pane
   const [locker, setLocker] = useState<LockerResponse | null>(null);
   const [lockerQ, setLockerQ] = useState("");
+  // v4.2 — §73 V2 governance planes: approvals queue + agent inventory
+  const [approvalsList, setApprovalsList] =
+    useState<import("../types").ApprovalRecord[] | null>(null);
+  const [inventory, setInventory] =
+    useState<import("../types").AgentInventoryResponse | null>(null);
   // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
   const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>({});
 
@@ -281,6 +286,28 @@ export function OpsNode() {
   useEffect(() => {
     if (pane === "locker" && !locker) void loadLocker();
   }, [pane, locker, loadLocker]);
+
+  // v4.2 — governance pane loaders
+  const loadGovernance = useCallback(async () => {
+    const [a, i] = await Promise.all([
+      api.listApprovals().catch(() => null),
+      api.agentInventory().catch(() => null),
+    ]);
+    if (a) setApprovalsList(a.approvals);
+    if (i) setInventory(i);
+  }, []);
+
+  useEffect(() => {
+    if (pane === "governance" && !inventory) void loadGovernance();
+  }, [pane, inventory, loadGovernance]);
+
+  const decide = async (approvalId: string, approved: boolean) => {
+    setError(null);
+    try {
+      await api.decideApproval(approvalId, approved);
+      await loadGovernance();
+    } catch (e) { setError(e as ApiError); }
+  };
 
   const approvePlan = async () => {
     if (!plan) return;
@@ -666,14 +693,15 @@ export function OpsNode() {
                 reduced to essentials (stream + alerts); the rest reappear
                 on resolve. No content is deleted, just decluttered. */}
             {((incident ? crisisPanes
-                        : ["strategy", "cases", "locker", "timeline", "alerts",
-                           "feed", "kpis", "stream"]) as Pane[]).map((p) => (
+                        : ["strategy", "cases", "locker", "governance",
+                           "timeline", "alerts", "feed", "kpis", "stream"]) as Pane[]).map((p: Pane) => (
               <button key={p} type="button"
                       className={pane === p ? "active" : ""}
                       onClick={() => setPane(p)}>
                 {{ strategy: "Strategy Map",
                    cases: `Cases${cases.length ? ` (${cases.length})` : ""}`,
-                   locker: "Evidence Locker", timeline: "Timeline",
+                   locker: "Evidence Locker", governance: "Governance",
+                   timeline: "Timeline",
                    alerts: `Alerts${alerts.length ? ` (${alerts.length})` : ""}`,
                    feed: "Intel Feed", kpis: "KPIs",
                    stream: "Data Stream" }[p]}
@@ -1033,6 +1061,118 @@ export function OpsNode() {
                 </>
               ) : (
                 <p className="muted">Loading locker…</p>
+              )}
+            </div>
+          )}
+
+          {pane === "governance" && (
+            <div className="card" aria-label="Governance planes">
+              <h3 style={{ marginTop: 0 }}>⚖ Governance (V2)</h3>
+              <p className="muted" style={{ fontSize: 13 }}>
+                §73 V2 — the approval engine is the durable surface for
+                REQUIRE_HUMAN decisions (§27/R-05); the agent inventory
+                answers, per node, "what could this agent reach if
+                compromised".
+              </p>
+
+              {/* ---------- approvals queue ---------- */}
+              <h4 style={{ margin: "10px 0 6px" }}>📋 Approvals</h4>
+              {!approvalsList && <p className="muted">Loading…</p>}
+              {approvalsList && approvalsList.length === 0 && (
+                <p className="muted">No approval records yet — promotions and
+                other external-effect actions mint them here.</p>
+              )}
+              {(approvalsList ?? []).map((a) => (
+                <div key={a.id} className="card" style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center",
+                                gap: 10, flexWrap: "wrap" }}>
+                    <strong style={{ fontSize: 13 }}>{a.summary}</strong>
+                    <span className="verdict-chip"
+                          data-verdict={a.status === "APPROVED" ? "VERIFIED"
+                            : a.status === "REJECTED" ? "MISLEADING"
+                            : "UNVERIFIED"}>
+                      {a.status}
+                    </span>
+                    {a.status === "PENDING" && (
+                      <>
+                        <button type="button" className="btn ghost"
+                                onClick={() => void decide(a.id, true)}>
+                          Approve
+                        </button>
+                        <button type="button" className="btn ghost"
+                                onClick={() => void decide(a.id, false)}>
+                          Reject
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <p className="muted" style={{ fontSize: 11, margin: "4px 0" }}>
+                    {a.kind} · {a.subject_ref} · requested by {a.requester} at{" "}
+                    {a.created_at.slice(0, 19)}
+                    {a.decided_by
+                      ? ` · decided by ${a.decided_by} at ${a.decided_at?.slice(0, 19)}`
+                      : " · awaiting human decision"}
+                  </p>
+                </div>
+              ))}
+
+              {/* ---------- agent inventory / supply chain ---------- */}
+              <h4 style={{ margin: "14px 0 6px" }}>🧭 Agent inventory &amp;
+                supply chain</h4>
+              {inventory && (
+                <p className="muted" style={{ fontSize: 11 }}>
+                  NIST RMF — govern: {inventory.readiness.govern} · map:{" "}
+                  {inventory.readiness.map} · measure:{" "}
+                  {inventory.readiness.measure}
+                  <br />{inventory.honest_limits}
+                </p>
+              )}
+              {(inventory?.agents ?? []).map((n) => (
+                <details key={n.agent_id} style={{ marginBottom: 6 }}>
+                  <summary style={{ cursor: "pointer" }}>
+                    <strong>{n.agent_id}</strong>{" "}
+                    <span className="verdict-chip"
+                          data-verdict={n.trust_status === "TRUSTED"
+                            ? "VERIFIED" : n.trust_status === "OBSERVED"
+                            ? "MOSTLY_TRUE" : "FALSE"}>
+                      {n.trust_status}
+                    </span>{" "}
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      {n.status} · {n.permissions.api_functions.length} fn ·{" "}
+                      {n.owner}
+                    </span>
+                  </summary>
+                  <div style={{ fontSize: 11, margin: "6px 0 10px 6px" }}>
+                    <p style={{ margin: "3px 0" }}>
+                      <b>Source:</b> <code>{n.source}</code> · <b>publisher:</b>{" "}
+                      {n.publisher} · <b>version:</b> {n.version}
+                    </p>
+                    <p style={{ margin: "3px 0" }}>
+                      <b>Data classification:</b> {n.data_classification}
+                    </p>
+                    <p style={{ margin: "3px 0" }}>
+                      <b>Credentials:</b> {n.credentials}
+                    </p>
+                    <p style={{ margin: "3px 0" }}>
+                      <b>Runtime exposure:</b> {n.runtime_exposure}
+                    </p>
+                    <p style={{ margin: "3px 0" }}>
+                      <b>Last reviewed:</b> {n.last_reviewed}
+                    </p>
+                    <p style={{ margin: "3px 0" }}>
+                      <b>Known issue:</b> {n.known_issue}
+                    </p>
+                    <p style={{ margin: "3px 0" }} className="review-route">
+                      ☢ {n.blast_radius_note}
+                    </p>
+                  </div>
+                </details>
+              ))}
+              {inventory && inventory.dependency_graph.edges.length > 0 && (
+                <p className="muted" style={{ fontSize: 11 }}>
+                  Dependency edges: {inventory.dependency_graph.edges
+                    .map((e) => `${e.from}→${e.to}`).join(" · ")}
+                </p>
               )}
             </div>
           )}

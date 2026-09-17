@@ -121,6 +121,29 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 11. v4.2 Governance Planes addendum
+
+- **Policy engine as single decision point — blast radius: HIGH, review D1.**
+  Centralizing authorization shrinks the attack surface *if* the engine is
+  sound — and is catastrophic if it isn't. Mitigations: fail-closed on ANY
+  failed check with the full ledger returned (no short-circuit hiding);
+  `authorize_run` delegation keeps byte-for-byte error/event parity (48
+  parity tests); engine never fabricates a PERMIT — the default with no
+  governing context is still explicit; denials are always recorded because
+  they are the safety signal, not noise.
+- **Approval engine effects — blast radius: HIGH, review D1.** A wrong
+  grant executes real effects (promotion rights). Mitigations: effects run
+  only from the grant hook (rejection is provably a no-op — tested);
+  decisions are single-use via an atomic `WHERE status='PENDING'` guard
+  (double-decide = 409, second decider never overwrites the first);
+  single-step flows still mint request+grant as two events so nothing is
+  "human-approved invisibly".
+- **Agent inventory blast-radius notes — blast radius: MEDIUM, review D2.**
+  Honest exposure statements could alarm legit adopters. Mitigation: notes
+  are template-derived from the declared allowlists and state their basis;
+  `honest_limits` records what the demo profile cannot claim (package
+  hashes, live runtime telemetry) rather than emitting fake attestation.
+
 ## 10. v4.1 Forensics & Evidence Fabric addendum
 
 - **OSINT dork builder — blast radius: MEDIUM-HIGH, review D2.** Query

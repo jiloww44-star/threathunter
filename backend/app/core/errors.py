@@ -100,4 +100,9 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "§76: no consequential action without living authorization",
         "Open or renew an investigation whose scope allows this action",
     ),
+    "APPROVAL_NOT_PENDING": (  # v4.2 approval engine double-decide guard
+        "That approval has already been decided",
+        "Decisions are single-use — the trail keeps both attempts",
+        "Refresh the approvals list to see the recorded decision",
+    ),
 }

@@ -5,7 +5,8 @@ import type {
   Incident, JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
   OpsNotification, PlanProposal, Prefs, RecentCheck, RegionsView, Statistics,
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
-  DorkSet, MediaForensics, LockerResponse,
+  DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
+  AgentInventoryResponse,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -229,6 +230,18 @@ export const api = {
       `/api/v1/evidence/locker?limit=${limit}`
       + (q ? `&q=${encodeURIComponent(q)}` : "")
       + (source ? `&source=${encodeURIComponent(source)}` : "")),
+
+  // ---- v4.2 governance planes (§73 V2): approvals + agent inventory ----
+  listApprovals: (status?: string) =>
+    request<{ approvals: ApprovalRecord[] }>(
+      `/api/v1/ops/approvals${status ? `?status=${status}` : ""}`),
+  decideApproval: (approvalId: string, approved: boolean,
+                   decidedBy = "operator") =>
+    request<ApprovalRecord>(
+      `/api/v1/ops/approvals/${approvalId}/${approved ? "approve" : "reject"}`,
+      { method: "POST", body: JSON.stringify({ decided_by: decidedBy }) }),
+  agentInventory: () =>
+    request<AgentInventoryResponse>("/api/v1/ops/agents/inventory"),
 };
 
 export interface ApiError {

@@ -19,6 +19,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from . import policy_engine
 from .errors import PipelineError
 
 AUTHORITIES = ("organization_owned", "client_authorized", "public_research",
@@ -87,42 +88,45 @@ def authorize_run(store, inv_id: str, branches: list[str],
                   user_id: str) -> dict:
     """§35/§76 gate — called by PATHFINDER BEFORE a tree is created.
 
-    Deterministic checks (§54): investigation exists, is OPEN, is not
-    expired; every decomposed branch's source families must be inside the
-    investigation's allowed_sources (empty list = open public tier).
-    Failures raise classified PipelineErrors, never silent defaults (§20).
+    v4.2: decision-making is delegated to the policy engine (§34:
+    deterministic = permissions, policy, audit). Behavior parity is
+    preserved exactly: expired, closed, or out-of-scope runs raise the
+    same classified PipelineErrors and emit the same §26 events.
     Returns the investigation row on success.
     """
     row = store.inv_get(inv_id)
     if not row:
         raise PipelineError("TREE_NOT_FOUND", status=404,
                             detail=f"investigation {inv_id} not found")
-    if row["status"] != "OPEN":
-        raise PipelineError("ACTION_DENIED", status=403,
-                            detail=(f"investigation {inv_id} is "
-                                    f"{row['status']} — §76: no action "
-                                    "without living authorization"))
-    exp = datetime.fromisoformat(row["expires_at"])
-    if exp.tzinfo is None:
-        exp = exp.replace(tzinfo=timezone.utc)
-    if exp < datetime.now(timezone.utc):
-        _event(store, "AuthorizationExpired", user_id,
-               f"investigation {inv_id} expired {row['expires_at']}")
-        raise PipelineError("ACTION_DENIED", status=403,
-                            detail=(f"authorization expired {row['expires_at']}"
-                                    " — §76: renew the investigation or open "
-                                    "a new one"))
     # store.inv_get() normalises the column into `allowed_sources`; accept
     # either shape so the gate never silently falls open.
     allowed = row.get("allowed_sources")
     if allowed is None:
         allowed = json.loads(row.get("allowed_sources_json") or "[]")
-    if allowed:  # non-empty allowlist = binding
-        needed: set[str] = set()
-        for b in branches:
-            needed |= set(BRANCH_SOURCES.get(b, ()))
-        denied = sorted(needed - set(allowed))
-        if denied:
+    needed: set[str] = set()
+    for b in branches:
+        needed |= set(BRANCH_SOURCES.get(b, ()))
+
+    decision = policy_engine.evaluate(
+        store, action="investigation_run", subject=inv_id,
+        investigation_row=row, requested_sources=sorted(needed))
+
+    if decision.decision == policy_engine.DENY:
+        outcomes = {c["check"]: c["outcome"] for c in decision.checks}
+        if outcomes.get("R-INV-LIFECYCLE") == "FAIL":
+            raise PipelineError("ACTION_DENIED", status=403,
+                                detail=(f"investigation {inv_id} is "
+                                        f"{row['status']} — §76: no action "
+                                        "without living authorization"))
+        if outcomes.get("R-INV-EXPIRY") == "FAIL":
+            _event(store, "AuthorizationExpired", user_id,
+                   f"investigation {inv_id} expired {row['expires_at']}")
+            raise PipelineError("ACTION_DENIED", status=403,
+                                detail=(f"authorization expired {row['expires_at']}"
+                                        " — §76: renew the investigation or open "
+                                        "a new one"))
+        if outcomes.get("R-DENY-SOURCES") == "FAIL":
+            denied = sorted(set(needed) - set(allowed))
             _event(store, "AuthorizationDenied", user_id,
                    f"investigation {inv_id}: sources not allowed {denied}")
             raise PipelineError(
@@ -130,6 +134,10 @@ def authorize_run(store, inv_id: str, branches: list[str],
                 detail=(f"investigation scope does not authorize source "
                         f"families {denied} (allowed: {allowed}); §35: LLM "
                         "proposes, policy disposes"))
+        # unreachable given the rule set — fail closed regardless
+        raise PipelineError("ACTION_DENIED", status=403,
+                            detail="policy decision DENY (§76)")
+    policy_engine.record(store, decision, actor=user_id)
     return row
 
 

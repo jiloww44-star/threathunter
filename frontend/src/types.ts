@@ -181,6 +181,43 @@ export interface AgentInventoryResponse {
   policy_version: string;
 }
 
+// -------------------------------------------- v4.3 continuous assurance V2.5
+export interface AssuranceRun {
+  id: string;
+  actor: string;
+  posture: "OK" | "ATTENTION" | "CRITICAL";
+  summary: {
+    run_id: string;
+    posture: "OK" | "ATTENTION" | "CRITICAL";
+    posture_reasons: string[];
+    events_emitted: { RiskRecalculated: number;
+      JourneyConditionChanged: number; AlertTriggered: number };
+    source_states: Record<string, string>;
+    degraded_or_worse: string[];
+    stale_sources: string[];
+    source_transitions: Array<{ source_id: string; from: string; to: string;
+      reason?: string }>;
+    consent_chain_valid: boolean | null;
+    consent_chain_entries: number | null;
+    pending_approvals: number;
+    active_incident: string | null;
+    reassessment_degraded: string | null;
+    engine_version: string;
+  };
+  started_at: string;
+  finished_at: string;
+}
+
+export interface AssuranceSweepResponse extends Omit<AssuranceRun, "id"> {
+  run_id: string;
+}
+
+export interface AssuranceStatus {
+  latest: AssuranceRun | null;
+  series: Array<{ id: string; posture: string; started_at: string }>;
+  note: string;
+}
+
 export interface JourneySegmentRisk {
   time: string;
   segment: string;

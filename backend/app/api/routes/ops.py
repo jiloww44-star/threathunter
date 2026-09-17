@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from ...api.deps import get_db
 from ...core import agent_inventory as agent_inventory_mod
-from ...core import approvals, trust_layer
+from ...core import approvals, assurance, trust_layer
 from ...core.errors import PipelineError
 from ...swarm import cortex, incident, pathfinder, registry
 from ...swarm.agents import auditor, voyager
@@ -295,6 +295,31 @@ async def agent_inventory(db=Depends(get_db)):
     publisher/permissions/credentials/trust/last reviewed/known issue/
     runtime exposure/data classification) + NIST-RMF readiness summary."""
     return agent_inventory_mod.inventory(db)
+
+
+# --------------------------------- v4.3 continuous assurance (§73 V2.5) ---
+@router.post("/ops/assurance/sweep")
+async def assurance_sweep(db=Depends(get_db)):
+    """Run a full assurance sweep: §1.10 reassessment (named §26 events),
+    §6/§32 source-health states + staleness SLA, consent-chain verification,
+    posture rollup. Persisted so posture is a SERIES, not a snapshot."""
+    return await assurance.run_assurance_sweep(db, actor="operator")
+
+
+@router.get("/ops/assurance/status")
+async def assurance_status(limit: int = 10, db=Depends(get_db)):
+    """Latest sweep + series: recent posture timeline for the Governance."""
+    runs = db.assurance_list(limit=max(1, min(limit, 50)))
+    latest = runs[0] if runs else None
+    return {
+        "latest": latest,
+        "series": [{"id": r["id"], "posture": r["posture"],
+                    "started_at": r["started_at"]} for r in runs],
+        "note": ("Continuous assurance is a series — sweep history is the "
+                 "audit of the audit plane. One run per operator request in "
+                 "the demo profile (§20: scheduled cadence is a V2.5+ "
+                 "enterprise connector, stated not faked)."),
+    }
 
 
 @router.post("/cortex/chat")

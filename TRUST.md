@@ -121,6 +121,13 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 12. v4.3 Continuous Assurance addendum
+
+- **Posture statement — blast radius: MEDIUM-HIGH, review D2.** An OK/ATTENTION/CRITICAL badge inverts trust if wrong: a false OK is the worst output a governance surface can emit. Mitigations: posture rules are deterministic and *favor alarms* (any degraded source ⇒ at least ATTENTION; consent-chain break or SEV1 ⇒ CRITICAL); reasons are always enumerated so the verdict can be falsified by inspection; the sweep is a *persisted series* — a single bad run can't rewrite history.
+- **§26 native naming in reassess_all — blast radius: LOW, review D1.** One emission site with per-channel monkeypatch points removed in favor of real events; double-emission is prevented by construction (counters downstream, no duplicate writes).
+- **SourceHealthChanged platform extension — blast radius: LOW, review D1.** Documented as an extension beyond §26 vocabulary in the mapping doc rather than smuggled into the spec's list.
+- **Notify → AlertTriggered at the store chokepoint — blast radius: LOW-MEDIUM, review D2.** Higher audit volume; mitigations: single event store by design (append-only), event rows carry the notification kind so filters stay precise.
+
 ## 11. v4.2 Governance Planes addendum
 
 - **Policy engine as single decision point — blast radius: HIGH, review D1.**

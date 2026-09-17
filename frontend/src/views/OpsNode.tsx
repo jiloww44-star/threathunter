@@ -92,6 +92,10 @@ export function OpsNode() {
     useState<import("../types").ApprovalRecord[] | null>(null);
   const [inventory, setInventory] =
     useState<import("../types").AgentInventoryResponse | null>(null);
+  // v4.3 — §73 V2.5 continuous assurance
+  const [assurance, setAssurance] =
+    useState<import("../types").AssuranceStatus | null>(null);
+  const [sweepBusy, setSweepBusy] = useState(false);
   // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
   const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>({});
 
@@ -289,13 +293,26 @@ export function OpsNode() {
 
   // v4.2 — governance pane loaders
   const loadGovernance = useCallback(async () => {
-    const [a, i] = await Promise.all([
+    const [a, i, s] = await Promise.all([
       api.listApprovals().catch(() => null),
       api.agentInventory().catch(() => null),
+      api.assuranceStatus().catch(() => null),
     ]);
     if (a) setApprovalsList(a.approvals);
     if (i) setInventory(i);
+    if (s) setAssurance(s);
   }, []);
+
+  // v4.3 — run an assurance sweep, then refresh the series
+  const runSweep = async () => {
+    if (sweepBusy) return;
+    setSweepBusy(true);
+    setError(null);
+    try {
+      await api.assuranceSweep();
+      await loadGovernance();
+    } catch (e) { setError(e as ApiError); } finally { setSweepBusy(false); }
+  };
 
   useEffect(() => {
     if (pane === "governance" && !inventory) void loadGovernance();
@@ -1074,6 +1091,57 @@ export function OpsNode() {
                 answers, per node, "what could this agent reach if
                 compromised".
               </p>
+
+              {/* ---------- v4.3 continuous assurance ---------- */}
+              <h4 style={{ margin: "10px 0 6px" }}>🛡 Continuous assurance</h4>
+              <div style={{ display: "flex", alignItems: "center", gap: 10,
+                            flexWrap: "wrap" }}>
+                <button type="button" className="btn" disabled={sweepBusy}
+                        onClick={() => void runSweep()}>
+                  {sweepBusy ? "Sweeping…" : "▶ Run assurance sweep"}
+                </button>
+                {assurance?.latest ? (
+                  <span className="verdict-chip"
+                        data-verdict={assurance.latest.posture === "OK"
+                          ? "VERIFIED" : assurance.latest.posture === "ATTENTION"
+                          ? "MOSTLY_TRUE" : "FALSE"}>
+                    posture: {assurance.latest.posture}
+                  </span>
+                ) : (
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    No sweeps yet — posture unknown until the first run.
+                  </span>
+                )}
+              </div>
+              {assurance?.latest && (
+                <div style={{ fontSize: 12, margin: "6px 0 4px" }}>
+                  {(assurance.latest.summary.posture_reasons ?? []).map((r) => (
+                    <p key={r} className="muted" style={{ margin: "2px 0" }}>
+                      · {r}
+                    </p>
+                  ))}
+                  <p className="muted" style={{ margin: "4px 0" }}>
+                    §26 events this sweep: RiskRecalculated ×
+                    {assurance.latest.summary.events_emitted?.RiskRecalculated ?? 0}
+                    {" · "}JourneyConditionChanged ×
+                    {assurance.latest.summary.events_emitted?.JourneyConditionChanged ?? 0}
+                    {" · "}AlertTriggered ×
+                    {assurance.latest.summary.events_emitted?.AlertTriggered ?? 0}
+                    {" · "}consent chain:{" "}
+                    {assurance.latest.summary.consent_chain_valid ? "intact"
+                      : "BROKEN"}
+                    {assurance.latest.summary.degraded_or_worse?.length
+                      ? ` · degraded sources: ${assurance.latest.summary.degraded_or_worse.join(", ")}`
+                      : ""}
+                  </p>
+                  {(assurance.series ?? []).length > 1 && (
+                    <p className="muted" style={{ fontSize: 11 }}>
+                      series: {assurance.series.map((s) =>
+                        `${s.posture} ${s.started_at.slice(5, 16)}`).join(" → ")}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* ---------- approvals queue ---------- */}
               <h4 style={{ margin: "10px 0 6px" }}>📋 Approvals</h4>

@@ -254,6 +254,15 @@ CREATE TABLE IF NOT EXISTS approvals (          -- v4.2 §26 approval engine
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS assurance_runs (     -- v4.3 continuous assurance
+    id TEXT PRIMARY KEY,
+    actor TEXT,
+    posture TEXT,        -- OK | ATTENTION | CRITICAL
+    summary_json TEXT,
+    started_at TEXT,
+    finished_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS declared_incidents (  -- functional crisis pathway
     incident_id TEXT PRIMARY KEY,
     severity TEXT,          -- SEV1 | SEV2 | SEV3
@@ -1000,6 +1009,12 @@ class EvidenceStore:
                        created_at) VALUES (?,?,?,?,?,?)""",
                 (nid, kind, title, body, ref, _now()))
             self._conn.commit()
+        # v4.3 §26 — every operator-facing notification IS an AlertTriggered
+        # event on the single audit store (no shadow event log).
+        self.audit(actor="platform", action="event:AlertTriggered",
+                   decision="ALLOW",
+                   detail=f"{kind}: {title[:120]}",
+                   policy_version="platform-events/4.3.0")
         return nid
 
     def list_notifications(self, limit: int = 25) -> list[dict]:
@@ -1340,6 +1355,35 @@ class EvidenceStore:
                 (status, decided_by, _now(), approval_id))
             self._conn.commit()
             return cur.rowcount
+
+    # ------------------------- v4.3 continuous assurance -------------------
+    def assurance_record(self, run_id: str, actor: str, posture: str,
+                         summary_json: str, started_at: str,
+                         finished_at: str):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO assurance_runs(id, actor, posture,
+                       summary_json, started_at, finished_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (run_id, actor, posture, summary_json, started_at,
+                 finished_at))
+            self._conn.commit()
+
+    def assurance_list(self, limit: int = 20) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT * FROM assurance_runs
+                   ORDER BY started_at DESC LIMIT ?""", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["summary"] = json.loads(d.pop("summary_json", None) or "{}")
+            out.append(d)
+        return out
+
+    def assurance_latest(self) -> dict | None:
+        runs = self.assurance_list(limit=1)
+        return runs[0] if runs else None
 
     # ------------------------- §5.3 consent ledger (append-only chain) ----
     def consent_append(self, entry_id: str, user_id: str, purpose: str,

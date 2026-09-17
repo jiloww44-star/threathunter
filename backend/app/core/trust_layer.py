@@ -133,14 +133,37 @@ async def reassess_open_checks(store: EvidenceStore, limit: int = 10
     return emitted
 
 
+def _emit_s26(store: EvidenceStore, name: str, detail: str) -> None:
+    """v4.3 — the §1.10 loop names its outputs with the spec's §26 event
+    vocabulary (RiskRecalculated / JourneyConditionChanged); every caller
+    of reassess_all (assurance sweep, /ops/reassess, post-ingest) inherits
+    the naming — one emission site, never duplicated downstream."""
+    store.audit(actor="trust-layer", action=f"event:{name}",
+                decision="ALLOW", detail=detail,
+                policy_version="trust-layer/1.10.0")
+
+
 async def reassess_all(store: EvidenceStore) -> dict:
     """The full §1.10 loop — watches (VOYAGER) + open hypotheses (engine)
-    + saved entity watchlists (§3.4 personalization drift alerts)."""
+    + saved entity watchlists (§3.4 personalization drift alerts).
+    v4.3: emits §26 RiskRecalculated / JourneyConditionChanged events for
+    each movement it records (AlertTriggered fires from store.notify)."""
     from ..swarm.agents import voyager
     from . import personalization
     watch_notes = voyager.reassess_watches(store)
     check_notes = await reassess_open_checks(store)
     watchlist_notes = personalization.reassess_watchlists(store)
+    for n in check_notes:
+        _emit_s26(store, "RiskRecalculated",
+                  f"check {n['check_id'][:12]}: {n['old']} → {n['new']}")
+    for n in watchlist_notes:
+        _emit_s26(store, "RiskRecalculated",
+                  f"watchlist {str(n.get('entry', '?'))[:40]}: "
+                  f"{n.get('old', '?')} → {n.get('new', '?')}")
+    for n in watch_notes:
+        _emit_s26(store, "JourneyConditionChanged",
+                  f"watch {str(n.get('watch_id', '?'))[:12]}: "
+                  f"{n.get('old', '?')} → {n.get('new', '?')}")
     return {"watch_notifications": watch_notes,
             "verdict_notifications": check_notes,
             "watchlist_notifications": watchlist_notes,

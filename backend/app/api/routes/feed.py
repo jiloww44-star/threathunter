@@ -53,27 +53,9 @@ async def statistics(db=Depends(get_db), user=Depends(current_user)):
 # v4.0 §6/§32 — Source Health Monitor: every connector carries one of the
 # deterministic lifecycle states. The mapping below is code, not judgment
 # (§54); notes from upsert_source_meta/update_source_health are the audit.
-SOURCE_HEALTH_STATES = ("ACTIVE", "DEGRADED", "AUTH_REQUIRED",
-                        "SCHEMA_CHANGED", "DEPRECATED", "UNAVAILABLE")
-
-
-def _health_state(meta: dict) -> str:
-    note = (meta.get("health_note") or "").upper()
-    if "DEPRECATED" in note:
-        return "DEPRECATED"
-    if "SCHEMA" in note:
-        return "SCHEMA_CHANGED"
-    if "AUTH" in note or "401" in note or "403" in note:
-        return "AUTH_REQUIRED"
-    score = meta.get("health_score")
-    if score is None:
-        # no scorecard yet — judge only by last outcome (§20 honesty)
-        return "ACTIVE" if meta.get("last_success_at") else "DEGRADED"
-    if score < 0.4:
-        return "UNAVAILABLE"
-    if score < 0.7:
-        return "DEGRADED"
-    return "ACTIVE"
+# v4.3 — the mapping moved to core.health (shared with the assurance loop);
+# re-exported here for backwards compatibility.
+from ...core.health import SOURCE_HEALTH_STATES, health_state as _health_state
 
 
 @router.get("/source-health")

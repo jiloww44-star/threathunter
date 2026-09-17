@@ -6,7 +6,7 @@ import type {
   OpsNotification, PlanProposal, Prefs, RecentCheck, RegionsView, Statistics,
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
   DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
-  AgentInventoryResponse,
+  AgentInventoryResponse, AssuranceStatus,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -242,6 +242,13 @@ export const api = {
       { method: "POST", body: JSON.stringify({ decided_by: decidedBy }) }),
   agentInventory: () =>
     request<AgentInventoryResponse>("/api/v1/ops/agents/inventory"),
+
+  // ---- v4.3 continuous assurance (§73 V2.5) ----
+  assuranceSweep: () =>
+    request<Record<string, unknown> & { posture: string; run_id: string }>(
+      "/api/v1/ops/assurance/sweep", { method: "POST" }),
+  assuranceStatus: () =>
+    request<AssuranceStatus>("/api/v1/ops/assurance/status"),
 };
 
 export interface ApiError {

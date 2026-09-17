@@ -22,9 +22,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from ...api.deps import get_db
+from ...api.deps import current_user, get_db
 from ...core import agent_inventory as agent_inventory_mod
-from ...core import approvals, assurance, trust_layer
+from ...core import approvals, assurance, rbac, trust_layer
 from ...core.errors import PipelineError
 from ...swarm import cortex, incident, pathfinder, registry
 from ...swarm.agents import auditor, voyager
@@ -208,9 +208,12 @@ async def agents(db=Depends(get_db)):
 
 
 @router.post("/ops/agents/custom")
-async def register_custom(req: CustomAgentRequest, db=Depends(get_db)):
+async def register_custom(req: CustomAgentRequest, db=Depends(get_db),
+                          user=Depends(current_user)):
     """A-13 + §5.2: AUDITOR validation gate; admission is SHADOW-mode only —
-    execution rights come from a later HUMAN promotion."""
+    execution rights come from a later HUMAN promotion.
+    v4.4: requires RBAC 'agents.register' (analyst+)."""
+    rbac.require_role(user, "agents.register")
     verdict = auditor.validate_custom_agent(db, req.name, req.functions)
     if verdict["verdict"] == "REJECTED":
         return {"status": "REJECTED", **verdict}
@@ -221,7 +224,9 @@ async def register_custom(req: CustomAgentRequest, db=Depends(get_db)):
 
 
 @router.post("/ops/agents/custom/{agent_id}/promote")
-async def promote_custom(agent_id: str, db=Depends(get_db)):
+async def promote_custom(agent_id: str, db=Depends(get_db),
+                         user=Depends(current_user)):
+    rbac.require_role(user, "agents.promote")
     """§5.2: promotion is an external-effect governance action — AUTH'd via
     AUDITOR (REQUIRE_HUMAN), and the human's decision is on the trail.
     v4.2: runs THROUGH the approval engine — an ApprovalRequested +
@@ -274,23 +279,28 @@ class ApprovalDecision(BaseModel):
 
 @router.post("/ops/approvals/{approval_id}/approve")
 async def approve(approval_id: str, req: ApprovalDecision,
-                  db=Depends(get_db)):
+                  db=Depends(get_db), user=Depends(current_user)):
     """§26 ApprovalGranted. Effects: only kinds the engine knows how to
-    execute are wired (promotions execute from the promote flow itself)."""
+    execute are wired (promotions execute from the promote flow itself).
+    v4.4: requires RBAC 'approvals.decide' (governance+)."""
+    rbac.require_role(user, "approvals.decide")
     return approvals.decide(db, approval_id, approved=True,
                             decided_by=req.decided_by)
 
 
 @router.post("/ops/approvals/{approval_id}/reject")
 async def reject(approval_id: str, req: ApprovalDecision,
-                 db=Depends(get_db)):
-    """Rejection — the effect NEVER ran, and that fact is on the trail."""
+                 db=Depends(get_db), user=Depends(current_user)):
+    """Rejection — the effect NEVER ran, and that fact is on the trail.
+    v4.4: requires RBAC 'approvals.decide' (governance+)."""
+    rbac.require_role(user, "approvals.decide")
     return approvals.decide(db, approval_id, approved=False,
                             decided_by=req.decided_by)
 
 
 @router.get("/ops/agents/inventory")
-async def agent_inventory(db=Depends(get_db)):
+async def agent_inventory(db=Depends(get_db), user=Depends(current_user)):
+    rbac.require_role(user, "inventory.read")
     """V2 agent supply chain: per-node cards (owner/version/source/
     publisher/permissions/credentials/trust/last reviewed/known issue/
     runtime exposure/data classification) + NIST-RMF readiness summary."""
@@ -299,7 +309,8 @@ async def agent_inventory(db=Depends(get_db)):
 
 # --------------------------------- v4.3 continuous assurance (§73 V2.5) ---
 @router.post("/ops/assurance/sweep")
-async def assurance_sweep(db=Depends(get_db)):
+async def assurance_sweep(db=Depends(get_db), user=Depends(current_user)):
+    rbac.require_role(user, "assurance.sweep")
     """Run a full assurance sweep: §1.10 reassessment (named §26 events),
     §6/§32 source-health states + staleness SLA, consent-chain verification,
     posture rollup. Persisted so posture is a SERIES, not a snapshot."""

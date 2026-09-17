@@ -121,6 +121,13 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 13. v4.4 Enterprise Plane addendum
+
+- **RBAC enforcement — blast radius: HIGH, review D1.** A permissive default would make roles cosmetic; an accidental hard requirement would brick the demo. Mitigations: matrix is deterministic and tested from both directions (403 floor tests + floor-pass tests); the demo human path is admin-with-disclosure openly declared in whoami; API keys can never self-elevate (role comes from key bearing, header overrides ignored on keyed paths); SSO remains documented-only — no fake IdP forms anywhere.
+- **Retention sweeper — blast radius: HIGH, review D1.** Deletion is unrecoverable. Mitigations: dry-run default on the route AND the function; per-class counts reported with the producing policy; every run writes its own audit row; audit_trail + consent_ledger are PERMANENT invariants with no code path in the sweeper (consent-chain deletion would self-evidence CRITICAL posture — v4.3 chain tests).
+- **SIEM export + HMAC — blast radius: MEDIUM, review D2.** Export of the audit plane leaks operational detail if the key mismanaged. Mitigation: export is governance-gated; the HMAC header only appears when the tenant sets TH360_SIEM_KEY — no key, no signature, never a spoofable header.
+- **Connector registry — blast radius: MEDIUM, review D2.** New connectors widen the fetch surface. Mitigations: registration is admin-scoped, activation is approval-gated (durable effect registry; rejection = provable no-op), env-var NAME only with pasted-secret rejection, retirement is immediate and auditable, day-one health visibility in §6/§32 monitor.
+
 ## 12. v4.3 Continuous Assurance addendum
 
 - **Posture statement — blast radius: MEDIUM-HIGH, review D2.** An OK/ATTENTION/CRITICAL badge inverts trust if wrong: a false OK is the worst output a governance surface can emit. Mitigations: posture rules are deterministic and *favor alarms* (any degraded source ⇒ at least ATTENTION; consent-chain break or SEV1 ⇒ CRITICAL); reasons are always enumerated so the verdict can be falsified by inspection; the sweep is a *persisted series* — a single bad run can't rewrite history.

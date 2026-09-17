@@ -96,6 +96,15 @@ export function OpsNode() {
   const [assurance, setAssurance] =
     useState<import("../types").AssuranceStatus | null>(null);
   const [sweepBusy, setSweepBusy] = useState(false);
+  // v4.4 — §73 Enterprise plane
+  const [whoami, setWhoami] =
+    useState<import("../types").Whoami | null>(null);
+  const [connectorsList, setConnectorsList] =
+    useState<import("../types").Connector[] | null>(null);
+  const [retentionRep, setRetentionRep] =
+    useState<import("../types").RetentionReport | null>(null);
+  const [connForm, setConnForm] = useState({
+    name: "", kind: "C_data_api", base_url: "", auth_env: "" });
   // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
   const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>({});
 
@@ -293,15 +302,48 @@ export function OpsNode() {
 
   // v4.2 — governance pane loaders
   const loadGovernance = useCallback(async () => {
-    const [a, i, s] = await Promise.all([
+    const [a, i, s, w, c] = await Promise.all([
       api.listApprovals().catch(() => null),
       api.agentInventory().catch(() => null),
       api.assuranceStatus().catch(() => null),
+      api.whoami().catch(() => null),
+      api.listConnectors().catch(() => null),
     ]);
     if (a) setApprovalsList(a.approvals);
     if (i) setInventory(i);
     if (s) setAssurance(s);
+    if (w) setWhoami(w);
+    if (c) setConnectorsList(c.connectors);
   }, []);
+
+  // v4.4 — enterprise plane actions
+  const runRetention = async (dryRun: boolean) => {
+    setError(null);
+    try { setRetentionRep(await api.retentionApply(dryRun)); }
+    catch (e) { setError(e as ApiError); }
+  };
+
+  const registerConn = async () => {
+    if (!connForm.name.trim() || !connForm.base_url.trim()) return;
+    setError(null);
+    try {
+      await api.registerConnector({
+        name: connForm.name, kind: connForm.kind,
+        base_url: connForm.base_url,
+        auth_env: connForm.auth_env || null,
+      });
+      setConnForm({ name: "", kind: "C_data_api", base_url: "", auth_env: "" });
+      await loadGovernance();
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  const retireConn = async (connectorId: string) => {
+    setError(null);
+    try {
+      await api.retireConnector(connectorId);
+      await loadGovernance();
+    } catch (e) { setError(e as ApiError); }
+  };
 
   // v4.3 — run an assurance sweep, then refresh the series
   const runSweep = async () => {
@@ -1241,6 +1283,126 @@ export function OpsNode() {
                   Dependency edges: {inventory.dependency_graph.edges
                     .map((e) => `${e.from}→${e.to}`).join(" · ")}
                 </p>
+              )}
+
+              {/* ---------- v4.4 enterprise plane ---------- */}
+              <h4 style={{ margin: "16px 0 6px" }}>🏢 Enterprise plane</h4>
+              {whoami && (
+                <p className="muted" style={{ fontSize: 11 }}>
+                  Identity: <code>{whoami.id}</code> · role{" "}
+                  <b>{whoami.role}</b> ({whoami.auth_class})
+                  {whoami.org_scope ? ` · org ${whoami.org_scope}` : ""} ·{" "}
+                  {whoami.permissions_granted.length} permissions granted
+                </p>
+              )}
+
+              {/* retention sweeper */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap",
+                            alignItems: "center", margin: "6px 0" }}>
+                <button type="button" className="btn ghost"
+                        onClick={() => void runRetention(true)}>
+                  🧹 Retention dry-run
+                </button>
+                <button type="button" className="btn ghost"
+                        onClick={() => void runRetention(false)}>
+                  Apply retention (deletes)
+                </button>
+                <a className="btn ghost" rel="noreferrer"
+                   href={api.siemExportUrl(24)} target="_blank">
+                  ⬇ SIEM export (NDJSON, 24h)
+                </a>
+              </div>
+              {retentionRep && (
+                <p className="muted" style={{ fontSize: 11 }}>
+                  {retentionRep.dry_run ? "DRY RUN — nothing deleted: "
+                    : "APPLIED — deleted: "}
+                  {Object.entries(retentionRep.classes).map(([k, v]) =>
+                    `${v.count} ${k.split("_older_than")[0]}`).join(" · ")}
+                  <br />Permanent invariants:{" "}
+                  {retentionRep.permanent_classes.join(", ")}
+                </p>
+              )}
+
+              {/* custom connectors */}
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer" }}>
+                  Register connector (admin; activation needs approval)
+                </summary>
+                <div className="field">
+                  <label htmlFor="conn-name">Name</label>
+                  <input id="conn-name" value={connForm.name}
+                         placeholder="Acme TI Feed"
+                         onChange={(e) => setConnForm({
+                           ...connForm, name: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="conn-kind">Kind (§80 types A–D)</label>
+                  <select id="conn-kind" value={connForm.kind}
+                          onChange={(e) => setConnForm({
+                            ...connForm, kind: e.target.value })}>
+                    <option value="A_methodology">A — methodology</option>
+                    <option value="B_discovery">B — discovery connector</option>
+                    <option value="C_data_api">C — data API</option>
+                    <option value="D_research_distribution">
+                      D — research distribution</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="conn-url">Base URL</label>
+                  <input id="conn-url" value={connForm.base_url}
+                         placeholder="https://ti.acme.example/api"
+                         onChange={(e) => setConnForm({
+                           ...connForm, base_url: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="conn-env">auth_env — env var NAME only,
+                    never the secret (§25)</label>
+                  <input id="conn-env" value={connForm.auth_env}
+                         placeholder="ACME_TI_API_KEY"
+                         onChange={(e) => setConnForm({
+                           ...connForm, auth_env: e.target.value })} />
+                </div>
+                <button type="button" className="btn" onClick={() => void registerConn()}>
+                  Register (mint approval)
+                </button>
+              </details>
+              {(connectorsList ?? []).length > 0 && (
+                <table className="task-matrix" style={{ marginTop: 8 }}>
+                  <thead>
+                    <tr><th>Connector</th><th>Kind</th><th>Status</th>
+                        <th></th></tr>
+                  </thead>
+                  <tbody>
+                    {(connectorsList ?? []).map((c) => (
+                      <tr key={c.id}>
+                        <td style={{ fontSize: 11 }}>
+                          {c.name}
+                          <div className="muted" style={{ fontSize: 10 }}>
+                            <code>{c.base_url.slice(0, 40)}</code>
+                            {c.auth_env ? ` · $${c.auth_env}` : ""}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: 11 }}>{c.kind}</td>
+                        <td>
+                          <span className="verdict-chip"
+                                data-verdict={c.status === "ACTIVE"
+                                  ? "VERIFIED" : c.status === "RETIRED"
+                                  ? "MISLEADING" : "UNVERIFIED"}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td>
+                          {c.status !== "RETIRED" && (
+                            <button type="button" className="btn ghost"
+                                    onClick={() => void retireConn(c.id)}>
+                              Retire
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           )}

@@ -33,6 +33,16 @@ def _event(store, name: str, actor: str, detail: str) -> None:
                 detail=detail, policy_version=ENGINE_VERSION)
 
 
+# Durable effect registry (v4.4): approvals decided LATER (via the
+# approvals queue, not the same-call flow) still get their effect — one
+# registered function per kind, called with (store, row) on grant only.
+_EFFECTS: dict = {}
+
+
+def register_effect(kind: str, fn) -> None:
+    _EFFECTS[kind] = fn
+
+
 def request(store, *, kind: str, subject_ref: str, summary: str,
             requester: str, context: dict | None = None) -> dict:
     """§26 ApprovalRequested — durable PENDING record."""
@@ -63,7 +73,12 @@ def decide(store, approval_id: str, *, approved: bool,
                f"{row['kind']} for {row['subject_ref']} approved by "
                f"{decided_by}")
         if on_approval is not None:
+            # same-call legacy hooks take the row
             on_approval(row)
+        elif row["kind"] in _EFFECTS:
+            # registered durable effects take (store, row) so queued
+            # decisions execute later by approval id
+            _EFFECTS[row["kind"]](store, row)
     else:
         _event(store, "ApprovalRejected", decided_by,
                f"{row['kind']} for {row['subject_ref']} rejected by "

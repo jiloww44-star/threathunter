@@ -263,6 +263,19 @@ CREATE TABLE IF NOT EXISTS assurance_runs (     -- v4.3 continuous assurance
     finished_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS connectors (         -- v4.4 custom connectors (§80)
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    kind TEXT,           -- A_methodology | B_discovery | C_data_api | D_research_distribution
+    base_url TEXT,
+    auth_env TEXT,       -- env var NAME holding the key (never the secret)
+    status TEXT DEFAULT 'PENDING_APPROVAL',  -- PENDING_APPROVAL | ACTIVE | RETIRED
+    registered_by TEXT,
+    approval_id TEXT,
+    created_at TEXT,
+    retired_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS declared_incidents (  -- functional crisis pathway
     incident_id TEXT PRIMARY KEY,
     severity TEXT,          -- SEV1 | SEV2 | SEV3
@@ -1384,6 +1397,74 @@ class EvidenceStore:
     def assurance_latest(self) -> dict | None:
         runs = self.assurance_list(limit=1)
         return runs[0] if runs else None
+
+    # ------------------------- v4.4 custom connectors (§80) ----------------
+    def connector_create(self, connector_id: str, name: str, kind: str,
+                         base_url: str, auth_env: str | None,
+                         registered_by: str, approval_id: str):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO connectors(id, name, kind, base_url, auth_env,
+                       status, registered_by, approval_id, created_at)
+                   VALUES (?,?,?,?,?, 'PENDING_APPROVAL', ?,?,?)""",
+                (connector_id, name, kind, base_url, auth_env,
+                 registered_by, approval_id, _now()))
+            self._conn.commit()
+
+    def connector_get(self, connector_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM connectors WHERE id=?",
+                (connector_id,)).fetchone()
+        return dict(r) if r else None
+
+    def connector_list(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM connectors ORDER BY created_at DESC").fetchall()
+        return [dict(r) for r in rows]
+
+    def connector_set_status(self, connector_id: str, status: str):
+        with self._lock:
+            if status == "RETIRED":
+                self._conn.execute(
+                    """UPDATE connectors SET status=?, retired_at=?
+                       WHERE id=?""",
+                    (status, _now(), connector_id))
+            else:
+                self._conn.execute(
+                    "UPDATE connectors SET status=? WHERE id=?",
+                    (status, connector_id))
+            self._conn.commit()
+
+    # ------------------------- v4.4 retention sweeper ----------------------
+    def delete_notifications_older_than(self, cutoff_iso: str) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM notifications WHERE created_at < ?",
+                (cutoff_iso,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def delete_assurance_older_than(self, cutoff_iso: str) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM assurance_runs WHERE started_at < ?",
+                (cutoff_iso,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def old_trees(self, cutoff_iso: str,
+                      statuses: tuple[str, ...] = ("COMPLETE", "CANCELLED",
+                                                   "REFUSED")
+                      ) -> list[str]:
+        with self._lock:
+            marks = ",".join("?" * len(statuses))
+            rows = self._conn.execute(
+                f"""SELECT tree_id FROM ops_trees
+                    WHERE status IN ({marks}) AND updated_at < ?""",
+                (*statuses, cutoff_iso)).fetchall()
+        return [r[0] for r in rows]
 
     # ------------------------- §5.3 consent ledger (append-only chain) ----
     def consent_append(self, entry_id: str, user_id: str, purpose: str,

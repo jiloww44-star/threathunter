@@ -218,6 +218,42 @@ export interface AssuranceStatus {
   note: string;
 }
 
+// ------------------------------------------------ v4.4 enterprise plane
+export interface Whoami {
+  id: string;
+  role: string;
+  auth_class: string;
+  org_scope?: string;
+  permissions_granted: string[];
+  roles_vocabulary: string[];
+  note: string;
+}
+
+export interface Connector {
+  id: string;
+  name: string;
+  kind: string;
+  base_url: string;
+  auth_env: string | null;
+  status: "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+  registered_by: string;
+  approval_id: string | null;
+  created_at: string;
+  retired_at?: string | null;
+}
+
+export interface RetentionClassReport { count: number; action: string }
+
+export interface RetentionReport {
+  dry_run: boolean;
+  policy: Record<string, number>;
+  permanent_classes: string[];
+  applied_at: string;
+  policy_version: string;
+  classes: Record<string, RetentionClassReport>;
+  note: string;
+}
+
 export interface JourneySegmentRisk {
   time: string;
   segment: string;

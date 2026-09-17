@@ -6,7 +6,8 @@ import type {
   OpsNotification, PlanProposal, Prefs, RecentCheck, RegionsView, Statistics,
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
   DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
-  AgentInventoryResponse, AssuranceStatus,
+  AgentInventoryResponse, AssuranceStatus, Whoami, Connector,
+  RetentionReport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -249,6 +250,30 @@ export const api = {
       "/api/v1/ops/assurance/sweep", { method: "POST" }),
   assuranceStatus: () =>
     request<AssuranceStatus>("/api/v1/ops/assurance/status"),
+
+  // ---- v4.4 enterprise plane (§73 Enterprise) ----
+  whoami: () => request<Whoami>("/api/v1/ops/whoami"),
+  retentionApply: (dryRun = true) =>
+    request<RetentionReport>("/api/v1/ops/retention/apply", {
+      method: "POST",
+      body: JSON.stringify({ dry_run: dryRun }),
+    }),
+  listConnectors: () =>
+    request<{ connectors: Connector[]; kinds: string[]; note: string }>(
+      "/api/v1/ops/connectors"),
+  registerConnector: (body: { name: string; kind: string; base_url: string;
+    auth_env?: string | null }) =>
+    request<Connector & { approval: ApprovalRecord }>(
+      "/api/v1/ops/connectors", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  retireConnector: (connectorId: string) =>
+    request<Connector>(`/api/v1/ops/connectors/${connectorId}/retire`, {
+      method: "POST",
+    }),
+  siemExportUrl: (sinceHours = 24, limit = 500) =>
+    `/api/v1/ops/siem/export?since_hours=${sinceHours}&limit=${limit}`,
 };
 
 export interface ApiError {

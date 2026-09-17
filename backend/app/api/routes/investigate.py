@@ -78,3 +78,10 @@ async def close_investigation(inv_id: str, req: CloseRequest,
     """§26 — InvestigationClosed; further bound runs will be refused (§76)."""
     return investigation.close(db, inv_id, actor=req.user_id,
                                reason=req.reason)
+
+
+@router.get("/{inv_id}/graph")
+async def investigation_graph(inv_id: str, db=Depends(get_db)):
+    """§73 V1.5 — the investigation's §5 evidence chain as a GraphData
+    node/edge model (renders in the existing EvidenceGraph component)."""
+    return investigation.graph(db, inv_id)

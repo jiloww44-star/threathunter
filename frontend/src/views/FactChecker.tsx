@@ -126,7 +126,21 @@ export function IntelligenceResult({ r, onReassess, onSpeak }: {
       <header className="result-head">
         <VerdictBadge verdict={r.verdict} />
         <ConfidenceMeter level={r.confidence} />
+        {r.coverage && (
+          /* §49-51 — Coverage is the second axis beside Confidence;
+             the basis always travels with the label. */
+          <span className={`coverage-chip cov-${r.coverage.toLowerCase()}`}
+                title={r.coverage_basis ?? "Coverage axis (§49-51)"}>
+            Coverage: {r.coverage}
+          </span>
+        )}
       </header>
+      {r.coverage_basis && (
+        <p className="coverage-basis muted" style={{ fontSize: 12,
+                                                     margin: "-4px 0 8px" }}>
+          🗺 {r.coverage_basis}
+        </p>
+      )}
 
       <p className="answer">{r.answer}</p>
 

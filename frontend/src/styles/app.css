@@ -389,6 +389,14 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
 .badge.moderate { background: #713f12; color: #fde68a; }
 .badge.high { background: #7f1d1d; color: #fecaca; }
 .badge.critical { background: #450a0a; color: #fca5a5; }
+
+/* v4.0 §49-51 — Coverage axis chip (second axis beside Confidence) */
+.coverage-chip { font-size: .68rem; font-weight: 800; padding: 3px 9px;
+  border-radius: 5px; margin-left: 10px; letter-spacing: .05em;
+  cursor: help; white-space: nowrap; }
+.coverage-chip.cov-high { background: #14532d; color: #bbf7d0; }
+.coverage-chip.cov-medium { background: #713f12; color: #fde68a; }
+.coverage-chip.cov-low { background: #312e81; color: #c7d2fe; }
 .timeline .why { margin: 7px 0 0; font-size: var(--text-sm); color: var(--color-text-dim); line-height: 1.55; }
 
 .route-card {

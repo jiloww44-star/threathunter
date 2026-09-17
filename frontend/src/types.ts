@@ -79,6 +79,65 @@ export interface Investigation {
   links?: InvestigationLink[];
 }
 
+// ------------------------------------------------ v4.1 OSINT console V1.5
+export interface Dork {
+  name: string;
+  objective: string;
+  search_engine: string;
+  syntax: string;
+  intended_use: string;
+  risk_level: "PASSIVE" | "PUBLIC_ACTIVE" | "AUTHORIZED_ACTIVE";
+  authorized_scope: string;
+  source: string;
+  last_verified: string;
+  why: string;
+  expected_results: string;
+  boundaries: string;
+}
+
+export interface DorkSet {
+  subject: string;
+  subject_type: string;
+  dorks: Dork[];
+  count: number;
+  generated_at: string;
+  degraded_note: string | null;
+  execution_note: string;
+  passive_first: string;
+  investigation_id?: string | null;
+}
+
+export interface MediaForensics {
+  media_ref: string | null;
+  assessment: string;
+  confidence: string;
+  checks: Record<string, string | null>;
+  note: string;
+  trust_label: string;
+  analyzed_at: string;
+}
+
+export interface LockerItem {
+  id: string;
+  source_id: string;
+  url: string | null;
+  title: string | null;
+  excerpt: string;
+  reliability: string | null;
+  authority: string | null;
+  independence_group: string | null;
+  published_at: string | null;
+  fetched_at: string | null;
+  content_hash: string;
+}
+
+export interface LockerResponse {
+  items: LockerItem[];
+  count: number;
+  total_stored: number;
+  note: string;
+}
+
 export interface JourneySegmentRisk {
   time: string;
   segment: string;

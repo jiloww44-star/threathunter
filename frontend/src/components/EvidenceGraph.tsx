@@ -11,6 +11,12 @@ const COLORS: Record<string, string> = {
   Source: "#8b5cf6",
   Entity: "#2563eb",
   Event: "#f59e0b",
+  // v4.1 §73 V1.5 — investigation evidence-chain nodes
+  Investigation: "#cfff00",
+  Tree: "#1a9b9b",
+  Task: "#0ea5e9",
+  Watch: "#f97316",
+  Finding: "#a855f7",
 };
 
 export function EvidenceGraph({ data }: { data: GraphData }) {
@@ -25,6 +31,12 @@ export function EvidenceGraph({ data }: { data: GraphData }) {
       Hypothesis: { r: 95 },
       Evidence: { r: 165 },
       Source: { r: 185 },
+      // v4.1 — Investigation centers its own chain; trees/tasks ring out
+      Investigation: { r: 0 },
+      Tree: { r: 80 },
+      Task: { r: 125 },
+      Watch: { r: 165 },
+      Finding: { r: 165 },
     };
     const buckets: Record<string, GraphData["nodes"][number][]> = {};
     for (const n of data.nodes) (buckets[n.type] ||= []).push(n);
@@ -71,7 +83,8 @@ export function EvidenceGraph({ data }: { data: GraphData }) {
         {data.nodes.map((n) => {
           const p = layout.get(n.id);
           if (!p) return null;
-          const r = n.type === "Claim" ? 14 : n.type === "Source" ? 9 : 11;
+          const r = n.type === "Claim" ? 14 : n.type === "Source" ? 9
+            : n.type === "Investigation" ? 15 : 11;
           return (
             <g key={n.id} onClick={() => setSelected(n)}
                style={{ cursor: "pointer" }} role="button" tabIndex={0}

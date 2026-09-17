@@ -121,6 +121,30 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 10. v4.1 Forensics & Evidence Fabric addendum
+
+- **OSINT dork builder — blast radius: MEDIUM-HIGH, review D2.** Query
+  syntax that finds exposed logins/documents is dual-use: the *generation*
+  of a dork is words on a page, but it teaches a method. Mitigations:
+  builder NEVER executes (no live connector in this profile — output can
+  never masquerade as an observation); every dork is PASSIVE-tagged with
+  declared boundaries and the passive-first ordering statement; binding to
+  a case reuses the §76 lifecycle gate (closed-case generation 403s);
+  unknown subject types/engines degrade to a disclosed baseline rather than
+  improvising; every set written to the audit trail.
+- **A-04 media forensics route — blast radius: MEDIUM, review D1.** A
+  wrong "fake" call is reputational damage; a wrong "authentic" call worse.
+  Mitigations preserved: §1.9 (UNVERIFIED ≠ fake) is the no-fixture
+  outcome; "Likely authentic" hedged; every call audited; demo fixtures are
+  recognizable, live media degrades honestly.
+- **Investigation graph over links — blast radius: LOW, review D1.** The
+  graph re-renders only rows already in the store; deleted artifacts
+  surface as retention *notes* (provenance outlives content, §26) — the
+  graph cannot imply evidence that isn't there.
+- **Evidence Locker — blast radius: LOW, review D1.** Read-only store view;
+  provenance columns mandatory per row; empty result states say "nothing
+  stored — not a verdict".
+
 ## 9. v4.0 Intelligence Core addendum
 
 - **§63 investigation authorization gate — blast radius: HIGH, review D1.**

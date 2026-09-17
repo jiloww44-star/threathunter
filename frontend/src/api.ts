@@ -5,6 +5,7 @@ import type {
   Incident, JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
   OpsNotification, PlanProposal, Prefs, RecentCheck, RegionsView, Statistics,
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
+  DorkSet, MediaForensics, LockerResponse,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -203,6 +204,31 @@ export const api = {
       last_success_at: string | null; authority: string | null }>;
       count: number; states_present: string[];
       states_vocabulary: string[] }>("/api/v1/feed/source-health"),
+
+  // ---- v4.1 OSINT console (§73 V1.5) + Evidence Locker (V1) ----
+  buildDorks: (body: { objective: string; subject: string;
+    subject_type?: string; search_engine?: string;
+    investigation_id?: string }) =>
+    request<DorkSet>("/api/v1/osint/dorks", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  mediaForensics: (mediaRef: string, linkToInvestigation?: string) =>
+    request<MediaForensics>("/api/v1/osint/forensics/media", {
+      method: "POST",
+      body: JSON.stringify(
+        linkToInvestigation
+          ? { media_ref: mediaRef, link_to_investigation: linkToInvestigation }
+          : { media_ref: mediaRef }),
+    }),
+  investigationGraph: (invId: string) =>
+    request<GraphData & { note: string }>(
+      `/api/v1/investigations/${invId}/graph`),
+  evidenceLocker: (q?: string, source?: string, limit = 60) =>
+    request<LockerResponse>(
+      `/api/v1/evidence/locker?limit=${limit}`
+      + (q ? `&q=${encodeURIComponent(q)}` : "")
+      + (source ? `&source=${encodeURIComponent(source)}` : "")),
 };
 
 export interface ApiError {

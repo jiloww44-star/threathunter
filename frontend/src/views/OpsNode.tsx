@@ -5,11 +5,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import type {
-  AgentInfo, CortexReply, Incident, Investigation, MeshStatus, OpsKpis,
+  AgentInfo, CortexReply, DorkSet, GraphData, Incident, Investigation,
+  LockerResponse, MeshStatus, OpsKpis,
   OpsNotification, PlanProposal, RecentCheck, StrategyMap, TaskStatus,
   UnifiedReport,
 } from "../types";
 import { ConfidenceMeter, ErrorPanel, TrustTag } from "../components/shared";
+import { EvidenceGraph } from "../components/EvidenceGraph";
 
 const STATUS_META: Record<TaskStatus, { icon: string; label: string }> = {
   COMPLETE: { icon: "✓", label: "done" },
@@ -32,7 +34,7 @@ interface ChatMsg {
 }
 
 type Pane = "strategy" | "timeline" | "alerts" | "feed" | "kpis" | "stream"
-  | "cases";
+  | "cases" | "locker";
 
 /** v4.0 §2 subject types — mirrors backend core.investigation.SUBJECT_TYPES */
 const SUBJECT_TYPES = ["person", "organization", "domain", "ip", "url",
@@ -79,6 +81,12 @@ export function OpsNode() {
     authority: "public_research", scope: "", allowed_sources: "",
     expires_days: 30,
   });
+  // v4.1 — per-case evidence-chain graphs + generated dork sets
+  const [caseGraphs, setCaseGraphs] = useState<Record<string, GraphData | null>>({});
+  const [caseDorks, setCaseDorks] = useState<Record<string, DorkSet | null>>({});
+  // v4.1 — §73 V1 Evidence Locker pane
+  const [locker, setLocker] = useState<LockerResponse | null>(null);
+  const [lockerQ, setLockerQ] = useState("");
   // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
   const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>({});
 
@@ -235,6 +243,44 @@ export function OpsNode() {
       if (activeCase === invId) setActiveCase(null);
     } catch (e) { setError(e as ApiError); }
   };
+
+  // v4.1 §73 V1.5 — investigation graph: the §5 evidence chain rendered
+  // with the existing EvidenceGraph (same GraphData model).
+  const toggleCaseGraph = async (invId: string) => {
+    if (caseGraphs[invId]) {
+      setCaseGraphs((g) => ({ ...g, [invId]: null }));
+      return;
+    }
+    try {
+      const g = await api.investigationGraph(invId);
+      setCaseGraphs((s) => ({ ...s, [invId]: g }));
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  // v4.1 — dork builder bound to the case's §63 scope (generation only)
+  const buildCaseDorks = async (inv: Investigation) => {
+    if (caseDorks[inv.id]) {
+      setCaseDorks((d) => ({ ...d, [inv.id]: null }));
+      return;
+    }
+    try {
+      const d = await api.buildDorks({
+        objective: inv.objective, subject: inv.subject,
+        subject_type: inv.subject_type, investigation_id: inv.id,
+      });
+      setCaseDorks((s) => ({ ...s, [inv.id]: d }));
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  // v4.1 — Evidence Locker (V1): provenance-first store browser
+  const loadLocker = useCallback(async (q?: string) => {
+    const l = await api.evidenceLocker(q).catch(() => null);
+    if (l) setLocker(l);
+  }, []);
+
+  useEffect(() => {
+    if (pane === "locker" && !locker) void loadLocker();
+  }, [pane, locker, loadLocker]);
 
   const approvePlan = async () => {
     if (!plan) return;
@@ -620,14 +666,14 @@ export function OpsNode() {
                 reduced to essentials (stream + alerts); the rest reappear
                 on resolve. No content is deleted, just decluttered. */}
             {((incident ? crisisPanes
-                        : ["strategy", "cases", "timeline", "alerts", "feed",
-                           "kpis", "stream"]) as Pane[]).map((p) => (
+                        : ["strategy", "cases", "locker", "timeline", "alerts",
+                           "feed", "kpis", "stream"]) as Pane[]).map((p) => (
               <button key={p} type="button"
                       className={pane === p ? "active" : ""}
                       onClick={() => setPane(p)}>
                 {{ strategy: "Strategy Map",
                    cases: `Cases${cases.length ? ` (${cases.length})` : ""}`,
-                   timeline: "Timeline",
+                   locker: "Evidence Locker", timeline: "Timeline",
                    alerts: `Alerts${alerts.length ? ` (${alerts.length})` : ""}`,
                    feed: "Intel Feed", kpis: "KPIs",
                    stream: "Data Stream" }[p]}
@@ -827,6 +873,16 @@ export function OpsNode() {
                         Link current tree
                       </button>
                     )}
+                    <button type="button" className="btn ghost"
+                            onClick={() => void toggleCaseGraph(inv.id)}>
+                      {caseGraphs[inv.id] ? "Hide graph" : "⛓ Graph"}
+                    </button>
+                    {inv.status === "OPEN" && (
+                      <button type="button" className="btn ghost"
+                              onClick={() => void buildCaseDorks(inv)}>
+                        {caseDorks[inv.id] ? "Hide dorks" : "🔎 Build dorks"}
+                      </button>
+                    )}
                     {inv.status === "OPEN" && (
                       <button type="button" className="btn ghost"
                               onClick={() => closeCase(inv.id)}>
@@ -854,8 +910,130 @@ export function OpsNode() {
                         .join(" · ")}
                     </p>
                   )}
+
+                  {/* v4.1 — evidence-chain graph expansion */}
+                  {caseGraphs[inv.id] && (
+                    <div style={{ marginTop: 8 }}>
+                      <EvidenceGraph data={caseGraphs[inv.id]!} />
+                      <p className="muted" style={{ fontSize: 11 }}>
+                        {(caseGraphs[inv.id] as GraphData & { note?: string })
+                          .note}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* v4.1 — dork builder expansion (generation only) */}
+                  {caseDorks[inv.id] && (
+                    <div style={{ marginTop: 8 }}>
+                      <p className="muted" style={{ fontSize: 11 }}>
+                        {caseDorks[inv.id]!.execution_note}{" "}
+                        {caseDorks[inv.id]!.passive_first}
+                      </p>
+                      <table className="task-matrix">
+                        <thead>
+                          <tr><th>Dork</th><th>Engine</th><th>Why / boundaries</th></tr>
+                        </thead>
+                        <tbody>
+                          {caseDorks[inv.id]!.dorks.map((d) => (
+                            <tr key={d.name}>
+                              <td><code style={{ fontSize: 11 }}>{d.syntax}</code>
+                                <div className="muted" style={{ fontSize: 10 }}>
+                                  {d.risk_level} · verified {d.last_verified.slice(0, 10)}
+                                </div>
+                              </td>
+                              <td>{d.search_engine}</td>
+                              <td style={{ fontSize: 11 }}>
+                                {d.why}<br />
+                                <span className="muted">{d.boundaries}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {pane === "locker" && (
+            <div className="card" aria-label="Evidence Locker">
+              <h3 style={{ marginTop: 0 }}>🗄 Evidence Locker</h3>
+              <p className="muted" style={{ fontSize: 13 }}>
+                §73 V1 — provenance-first store browser. Absence = nothing
+                stored, never a verdict (§1.9).
+              </p>
+              <form className="field" style={{ display: "flex", gap: 8 }}
+                    onSubmit={(e) => { e.preventDefault();
+                                       void loadLocker(lockerQ || undefined); }}>
+                <input id="locker-q" value={lockerQ}
+                       placeholder="search title / excerpt / url…"
+                       onChange={(e) => setLockerQ(e.target.value)}
+                       style={{ flex: 1 }} />
+                <button type="submit" className="btn">Search</button>
+                {lockerQ && (
+                  <button type="button" className="btn ghost"
+                          onClick={() => { setLockerQ("");
+                                           void loadLocker(); }}>
+                    Clear
+                  </button>
+                )}
+              </form>
+              {locker ? (
+                <>
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    {locker.count} shown · {locker.total_stored} stored ·{" "}
+                    {locker.note}
+                  </p>
+                  <table className="task-matrix">
+                    <thead>
+                      <tr><th>Evidence</th><th>Source</th><th>Authority</th>
+                          <th>Fetched</th></tr>
+                    </thead>
+                    <tbody>
+                      {locker.items.map((it) => (
+                        <tr key={it.id}>
+                          <td>
+                            <span style={{ fontSize: 12 }}>
+                              {it.title ?? "(untitled)"}
+                            </span>
+                            <div className="muted" style={{ fontSize: 10 }}>
+                              {it.excerpt.slice(0, 120)}
+                              {it.excerpt.length > 120 ? "…" : ""}
+                            </div>
+                            {it.url && (
+                              <div className="muted" style={{ fontSize: 10 }}>
+                                <code>{it.url.slice(0, 80)}</code>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ fontSize: 11 }}>{it.source_id}
+                            <div className="muted" style={{ fontSize: 10 }}>
+                              hash {it.content_hash} · grp {it.independence_group?.slice(0, 14)}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="verdict-chip"
+                                  data-verdict={it.authority === "PRIMARY"
+                                    ? "VERIFIED" : "MOSTLY_TRUE"}>
+                              {it.authority ?? "UNKNOWN"}
+                            </span>
+                            <div className="muted" style={{ fontSize: 10 }}>
+                              {it.reliability ?? ""}
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                            {it.fetched_at ? it.fetched_at.slice(0, 10) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              ) : (
+                <p className="muted">Loading locker…</p>
+              )}
             </div>
           )}
 

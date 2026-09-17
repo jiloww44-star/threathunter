@@ -151,3 +151,77 @@ def close(store, inv_id: str, actor: str, reason: str = "") -> dict:
     _event(store, "InvestigationClosed", actor,
            f"{inv_id} closed{': ' + reason if reason else ''}")
     return get(store, inv_id)
+
+
+# ------------------------------------------------ V1.5 investigation graph --
+def graph(store, inv_id: str) -> dict:
+    """§73 V1.5 investigation graph — the evidence chain (§5) as nodes/edges,
+    in the same GraphData shape as Part 12 (EvidenceGraph renders it as-is):
+      Investigation —LINKED_TO→ Tree —HAS_TASK→ Task
+      Investigation —LINKED_TO→ Evidence | Watch | Finding | VerificationCase
+    Derived live from investigation_links + the store: nothing is invented,
+    an empty chain renders empty (§20)."""
+    row = get(store, inv_id)  # 404s for unknown ids
+    inv_node = f"inv-{inv_id}"
+    nodes = [{"id": inv_node, "type": "Investigation",
+              "label": row["objective"][:48],
+              "provenance": {"authority": row["authority"],
+                             "subject": f"{row['subject_type']}:{row['subject']}",
+                             "status": row["status"],
+                             "expires_at": row["expires_at"],
+                             "allowed_sources": row["allowed_sources"]
+                             or ["open public tier"]}}]
+    edges: list[dict] = []
+    seen: set[str] = {inv_node}
+
+    def add(node_id: str, ntype: str, label: str, prov: dict,
+            parent: str = inv_node, edge_type: str = "LINKED_TO"):
+        if node_id not in seen:
+            nodes.append({"id": node_id, "type": ntype, "label": label,
+                          "provenance": prov})
+            seen.add(node_id)
+        edges.append({"id": f"e-{parent}-{node_id}", "source": parent,
+                      "target": node_id, "type": edge_type})
+
+    for l in row["links"]:
+        kind, ref = l["kind"], l["ref_id"]
+        if kind == "ops_tree":
+            tree = store.get_tree(ref)
+            if not tree:
+                add(f"tree-{ref}", "Tree", f"tree {ref[:8]} (removed)",
+                    {"link_created_at": l["created_at"],
+                     "note": "linked tree no longer in store — link retained"
+                             " for audit provenance (§26)"})
+                continue
+            tid = f"tree-{ref}"
+            add(tid, "Tree", tree["goal"][:48],
+                {"status": tree["status"], "peer_id": tree.get("peer_id"),
+                 "link_created_at": l["created_at"]})
+            for t in tree.get("tasks", [])[:12]:
+                add(f"task-{ref}-{t['task_id']}", "Task",
+                    f"{t['agent']}·{t['function']}",
+                    {"status": t["status"], "agent": t["agent"],
+                     "function": t["function"],
+                     "classified_error": t.get("classified_error")},
+                    parent=tid, edge_type="HAS_TASK")
+        elif kind == "evidence":
+            ev = store.get_evidence(ref)
+            add(f"ev-{ref}", "Evidence",
+                (ev or {}).get("title") or f"evidence {ref[:8]}",
+                {"source_id": (ev or {}).get("source_id"),
+                 "authority": (ev or {}).get("authority"),
+                 "url": (ev or {}).get("url"),
+                 "link_created_at": l["created_at"],
+                 "present_in_store": bool(ev)})
+        elif kind == "watch":
+            add(f"watch-{ref}", "Watch", f"watch {ref[:8]}",
+                {"link_created_at": l["created_at"]})
+        else:
+            add(f"{kind}-{ref}", kind.capitalize().replace("_", ""),
+                f"{kind} {ref[:8]}",
+                {"link_created_at": l["created_at"]})
+
+    return {"nodes": nodes, "edges": edges,
+            "note": ("§5 evidence chain for this investigation. Deletion of "
+                     "linked artifacts never removes the audit link — "
+                     "provenance outlives content (§26).")}

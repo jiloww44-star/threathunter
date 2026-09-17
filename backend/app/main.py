@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.routes import (admin, factcheck, feed, graph, investigate, journey,
-                         kyc, ops, privacy, voice)
+                         kyc, ops, osint, privacy, voice)
 from .core.errors import ERROR_MAP, PipelineError
 from .store.db import get_store
 
@@ -90,7 +90,7 @@ async def root():
         "product": "ThreatHunter360",
         "version": "4.0.0 INTELLIGENCE CORE",
         "modules": ["factcheck", "journey", "kyc", "ops-node", "cortex",
-                    "investigations"],
+                    "investigations", "osint"],
         "agents": ["VOYAGER", "SENTINEL", "SENTINEL_FORENSICS", "HUNTER",
                    "AUDITOR"],
         "docs": "/docs",
@@ -100,5 +100,5 @@ async def root():
 
 
 for module in (factcheck, journey, kyc, feed, graph, voice, admin, ops,
-               privacy, investigate):
+               privacy, investigate, osint):
     app.include_router(module.router)

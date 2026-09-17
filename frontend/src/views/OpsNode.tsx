@@ -7,8 +7,8 @@ import { api, type ApiError } from "../api";
 import type {
   AgentInfo, CortexReply, DorkSet, GraphData, Incident, Investigation,
   KpiValue, LockerResponse, MeshStatus, OpsKpis, OpsKpisV71,
-  OpsNotification, PlanProposal, RecentCheck, StrategyMap, TaskStatus,
-  UnifiedReport,
+  OpsNotification, PlanProposal, RecentCheck, RerouteRow, ReviewItem,
+  StrategyMap, TaskStatus, UnifiedReport,
 } from "../types";
 import { ConfidenceMeter, ErrorPanel, TrustTag } from "../components/shared";
 import { EvidenceGraph } from "../components/EvidenceGraph";
@@ -180,6 +180,10 @@ export function OpsNode() {
     useState<import("../types").Connector[] | null>(null);
   const [retentionRep, setRetentionRep] =
     useState<import("../types").RetentionReport | null>(null);
+  // v4.6 — §71 human-outcome write-paths surfaced in Governance + Alerts
+  const [reviews, setReviews] = useState<ReviewItem[] | null>(null);
+  const [correctionText, setCorrectionText] = useState("");
+  const [reroutes, setReroutes] = useState<RerouteRow[] | null>(null);
   const [connForm, setConnForm] = useState({
     name: "", kind: "C_data_api", base_url: "", auth_env: "" });
   // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
@@ -379,18 +383,22 @@ export function OpsNode() {
 
   // v4.2 — governance pane loaders
   const loadGovernance = useCallback(async () => {
-    const [a, i, s, w, c] = await Promise.all([
+    const [a, i, s, w, c, q, r] = await Promise.all([
       api.listApprovals().catch(() => null),
       api.agentInventory().catch(() => null),
       api.assuranceStatus().catch(() => null),
       api.whoami().catch(() => null),
       api.listConnectors().catch(() => null),
+      api.reviewQueue().catch(() => null),
+      api.reroutes().catch(() => null),
     ]);
     if (a) setApprovalsList(a.approvals);
     if (i) setInventory(i);
     if (s) setAssurance(s);
     if (w) setWhoami(w);
     if (c) setConnectorsList(c.connectors);
+    if (q) setReviews(q.queue);
+    if (r) setReroutes(r.reroutes);
   }, []);
 
   // v4.4 — enterprise plane actions
@@ -441,6 +449,48 @@ export function OpsNode() {
     setError(null);
     try {
       await api.decideApproval(approvalId, approved);
+      await loadGovernance();
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  // v4.6 — human-outcome adjudications (§71 write-paths); every decision
+  // is single-use server-side, the buttons simply surface the 409 honest.
+  const decideReview = async (reviewId: string,
+                              decision: "CONFIRMED" | "CORRECTED") => {
+    setError(null);
+    if (decision === "CORRECTED" && !correctionText.trim()) {
+      setError({ code: "INPUT",
+                title: "Correction needs to be in writing",
+                meaning: "CORRECTED without the corrected outcome is not an " +
+                  "analyst correction (§71 needs the diff, §76 needs the " +
+                  "words).",
+                next_step: "Set the correction note, then press Correct." });
+      return;
+    }
+    try {
+      await api.decideReview(reviewId, decision,
+                             decision === "CORRECTED"
+                               ? correctionText.trim() : undefined);
+      setCorrectionText("");
+      await loadGovernance();
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  const adjudicate = async (notificationId: string,
+                            verdict: "TRUE_POSITIVE" | "FALSE_POSITIVE") => {
+    setError(null);
+    try {
+      await api.adjudicateAlert(notificationId, verdict);
+      const n = await api.opsNotifications().catch(() => null);
+      if (n) setAlerts(n.notifications);
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  const decideReroute = async (watchId: string,
+                               decision: "ACCEPT" | "DECLINE") => {
+    setError(null);
+    try {
+      await api.decideReroute(watchId, decision);
       await loadGovernance();
     } catch (e) { setError(e as ApiError); }
   };
@@ -1303,6 +1353,114 @@ export function OpsNode() {
                 </div>
               ))}
 
+              {/* ---------- v4.6 review decisions (§27 write-path) -------- */}
+              <h4 style={{ margin: "14px 0 6px" }}>🧾 Review decisions (§27)</h4>
+              <p className="muted" style={{ fontSize: 11, margin: "0 0 6px" }}>
+                Every decision records the system's prior verdict and — for
+                CORRECTED — the analyst's correction in writing. These diffs
+                are what the §71 analyst/fact-checker correction KPIs measure.
+              </p>
+              {reviews === null ? null : reviews.length === 0 ? (
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Queue empty — nothing awaiting human judgment.
+                </p>
+              ) : (
+                <>
+                  <input
+                    className="correction-input"
+                    placeholder="Correction note (required for CORRECTED)"
+                    value={correctionText}
+                    onChange={(e) => setCorrectionText(e.target.value)}
+                  />
+                  {reviews.slice(0, 8).map((rv) => (
+                    <div key={rv.id} className="evidence-item">
+                      <div className="head">
+                        <span className={`badge ${
+                          rv.status === "OPEN" ? "moderate" : "low"}`}>
+                          {rv.module} · {rv.tier ?? "—"}
+                        </span>
+                        <strong>{rv.reason}</strong>
+                        {rv.status === "OPEN" ? (
+                          <>
+                            <button type="button" className="btn ghost"
+                                    onClick={() =>
+                                      void decideReview(rv.id, "CONFIRMED")}>
+                              ✓ Confirm
+                            </button>
+                            <button type="button" className="btn ghost"
+                                    onClick={() =>
+                                      void decideReview(rv.id, "CORRECTED")}>
+                              ✎ Correct
+                            </button>
+                          </>
+                        ) : (
+                          <span className={`verdict-chip`} data-verdict={
+                            rv.decision === "CORRECTED"
+                              ? "FALSE" : "VERIFIED"}>
+                            {rv.decision}
+                          </span>
+                        )}
+                      </div>
+                      <p className="muted" style={{ fontSize: 11,
+                                                    margin: "4px 0" }}>
+                        risk {rv.risk} · queued {rv.created_at.slice(0, 19)}
+                        {rv.status === "DECIDED" &&
+                          ` · by ${rv.decided_by}${rv.prior_outcome
+                            ? ` · system said ${rv.prior_outcome}` : ""}${rv.corrected_outcome
+                            ? ` → analyst: ${rv.corrected_outcome}` : ""}`}
+                      </p>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* ---------- v4.6 journey oversight — reroutes ---------- */}
+              <h4 style={{ margin: "14px 0 6px" }}>🧭 Journey oversight —
+                reroutes</h4>
+              <p className="muted" style={{ fontSize: 11, margin: "0 0 6px" }}>
+                Machine reroute recommendations awaiting a human answer — the
+                accept/decline ratio is the §71 reroute-acceptance KPI.
+              </p>
+              {reroutes === null ? null : reroutes.length === 0 ? (
+                <p className="muted" style={{ fontSize: 12 }}>
+                  No pending or decided reroute recommendations.
+                </p>
+              ) : reroutes.slice(0, 8).map((w) => (
+                <div key={w.watch_id} className="evidence-item">
+                  <div className="head">
+                    <span className={`badge ${
+                      w.reroute_pending ? "high" : "low"}`}>
+                      {w.reroute_pending ? "PENDING" : w.reroute_outcome}
+                    </span>
+                    <strong>{w.origin} → {w.destination}</strong>
+                    {w.reroute_pending === 1 && (
+                      <>
+                        <button type="button" className="btn ghost"
+                                onClick={() =>
+                                  void decideReroute(w.watch_id, "ACCEPT")}>
+                          Accept reroute
+                        </button>
+                        <button type="button" className="btn ghost"
+                                onClick={() =>
+                                  void decideReroute(w.watch_id, "DECLINE")}>
+                          Decline
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <p className="muted" style={{ fontSize: 11,
+                                                margin: "4px 0" }}>
+                    risk {w.current_risk ?? "—"} · watch {w.status.toLowerCase()}
+                    {w.reroute_decided_at
+                      ? ` · answered ${w.reroute_decided_at.slice(0, 19)}`
+                      : ""}
+                    {w.reroute_outcome === "AUTO_RESOLVED"
+                      ? " · engine retired its own recommendation when risk eased"
+                      : ""}
+                  </p>
+                </div>
+              ))}
+
               {/* ---------- agent inventory / supply chain ---------- */}
               <h4 style={{ margin: "14px 0 6px" }}>🧭 Agent inventory &amp;
                 supply chain</h4>
@@ -1559,10 +1717,37 @@ export function OpsNode() {
                       {n.kind.replace("_", " ")}
                     </span>
                     <strong>{n.title}</strong>
+                    {/* v4.6 — one verdict per alert; feeds false-alarm KPI */}
+                    {n.adjudication ? (
+                      <span className="verdict-chip" data-verdict={
+                        n.adjudication === "FALSE_POSITIVE"
+                          ? "FALSE" : "VERIFIED"}>
+                        {n.adjudication === "FALSE_POSITIVE"
+                          ? "false alarm" : "true positive"}
+                      </span>
+                    ) : (
+                      <>
+                        <button type="button" className="btn ghost"
+                                title="Adjudicate: the alert was real"
+                                onClick={() =>
+                                  void adjudicate(n.id, "TRUE_POSITIVE")}>
+                          ✓ real
+                        </button>
+                        <button type="button" className="btn ghost"
+                                title="Adjudicate: the alert was a false alarm"
+                                onClick={() =>
+                                  void adjudicate(n.id, "FALSE_POSITIVE")}>
+                          ✕ false alarm
+                        </button>
+                      </>
+                    )}
                   </div>
                   <p className="excerpt">{n.body}</p>
                   <div className="meta">{new Date(n.created_at)
-                    .toLocaleString()}</div>
+                    .toLocaleString()}
+                    {n.adjudicated_at
+                      ? ` · adjudicated by ${n.adjudicated_by}` : ""}
+                  </div>
                 </div>
               ))}
             </div>

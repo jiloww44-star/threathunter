@@ -149,7 +149,11 @@ def reassess_watches(store: EvidenceStore) -> list[dict]:
             kind, title = ("RISK_ELEVATION",
                            f"Risk elevated on {w['origin']} → {w['destination']}")
             if _RISK_ORDER.index(new) >= _RISK_ORDER.index(tol):
-                store.update_watch(w["watch_id"], status="ELEVATED")
+                # v4.6 — elevation past tolerance is a *reroute
+                # recommendation*; it is pending until the operator
+                # ACCEPTs or DECLINEs it (§71 reroute acceptance).
+                store.update_watch(w["watch_id"], status="ELEVATED",
+                                   reroute_pending=1)
             body = (f"Monitored journey risk moved {old} → {new}. "
                     f"This appears driven by newly recorded evidence on the "
                     f"corridor — review the updated timeline before departure. "
@@ -158,6 +162,11 @@ def reassess_watches(store: EvidenceStore) -> list[dict]:
             kind, title = ("RISK_RESOLUTION",
                            f"Risk eased on {w['origin']} → {w['destination']}")
             store.update_watch(w["watch_id"], status="MONITORING")
+            # v4.6 — risk eased with a recommendation still pending: the
+            # engine resolves its own stale recommendation honestly
+            # (AUTO_RESOLVED counts as neither acceptance nor rejection).
+            from ...core.adjudication import auto_resolve_reroute
+            auto_resolve_reroute(store, w["watch_id"])
             body = (f"Monitored journey risk moved {old} → {new} on the "
                     f"latest evidence refresh.")
         nid = store.notify(kind=kind, title=title, body=body,

@@ -7,7 +7,7 @@ import type {
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
   DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
   AgentInventoryResponse, AssuranceStatus, Whoami, Connector,
-  RetentionReport,
+  RetentionReport, ReviewItem, RerouteRow,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -56,8 +56,30 @@ export const api = {
   analyticsSummary: (days = 30) =>
     request<AnalyticsSummary>(`/api/v1/admin/analytics/summary?days=${days}`),
   reviewQueue: () =>
-    request<{ depth: number; by_tier: Record<string, number> }>(
+    request<{ queue: ReviewItem[]; depth: number;
+              by_tier: Record<string, number>; sla?: string }>(
       "/api/v1/admin/review-queue"),
+  // ---- v4.6 §71 human-outcome write-paths (analyst tier) ----
+  decideReview: (reviewId: string, decision: "CONFIRMED" | "CORRECTED",
+                 correctedOutcome?: string) =>
+    request<ReviewItem>(`/api/v1/ops/review/${reviewId}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ decision,
+                             corrected_outcome: correctedOutcome ?? null }),
+    }),
+  adjudicateAlert: (notificationId: string,
+                    verdict: "TRUE_POSITIVE" | "FALSE_POSITIVE") =>
+    request<OpsNotification>(
+      `/api/v1/ops/notifications/${notificationId}/adjudicate`, {
+        method: "POST", body: JSON.stringify({ verdict }),
+      }),
+  decideReroute: (watchId: string, decision: "ACCEPT" | "DECLINE") =>
+    request<RerouteRow>(`/api/v1/ops/watches/${watchId}/reroute`, {
+      method: "POST", body: JSON.stringify({ decision }),
+    }),
+  reroutes: () =>
+    request<{ reroutes: RerouteRow[]; pending: number; note: string }>(
+      "/api/v1/ops/watches/reroutes"),
   sourceHealth: () =>
     request<{ sources: Array<{
       source_id: string;

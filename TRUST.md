@@ -121,6 +121,13 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 15. v4.6 Measurement Closure addendum
+
+- **Adjudication write-paths — blast radius: MEDIUM, review D2.** Human-outcome records now feed five §71 KPIs; a corrupt adjudication poisons the denominator. Mitigations: every decision is an atomic single-write (second attempt 409s with the recorded verdict named — approvals-engine parity); CORRECTED decisions require the correction in writing (validator, not convention); prior system verdicts are captured at decision time from the system's own persisted rows, never recollected later; denied/expired flows touched zero existing paths (additions only).
+- **Reroute denominator rules — blast radius: MEDIUM-HIGH, review D2.** The acceptance KPI is only trustworthy if the denominator can't be gamed. Rules are code, not convention: AUTO_RESOLVED (risk eased by itself) is excluded from human-denominator math by construction; one decision per pending recommendation; a resolved watch can't be re-adjudicated into the sample.
+- **§26 vocabulary extensions (ReviewDecided / RerouteAdjudicated / AlertAdjudicated) — blast radius: LOW, review D1.** Documented openly as platform extensions (SourceHealthChanged precedent, v4.3) — never presented as spec-named events.
+- **Latency persistence — blast radius: LOW, review D1.** perf_counter around the pipeline, ms float column; no behavior change to verdicts, no-engineering-path branched on the value.
+
 ## 14. v4.5 Pilot Readiness addendum
 
 - **§21/§71 KPI statements — blast radius: MEDIUM-HIGH, review D2.** A KPI is a claim about the platform; a wrong "green" is the second-worst output after a false posture OK (v4.3 addendum). Mitigations: every KPI carries `{status, sample, basis}` — unmeasurable spec metrics report UNAVAILABLE with the missing write-path named (telemetry obeys §20); measured zeros require a real denominator (sample > 0) else UNAVAILABLE; the Prometheus exporter omits UNAVAILABLE value series so ops pipelines can't ingest fabricated numbers (`th360_kpi_available` exists precisely to alert on measurement loss); `kpi_sql` is SELECT-only at the chokepoint so telemetry can never write.

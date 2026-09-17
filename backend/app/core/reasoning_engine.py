@@ -49,6 +49,8 @@ class ReasoningEngine:
 
     async def run_full_pipeline(self, claim: str, user: str = "demo",
                                 persist: bool = True) -> FactCheckResponse:
+        import time as _time
+        _t0 = _time.perf_counter()   # v4.6 — §71 fact-check latency metric
         trace: list[str] = []
 
         # ---- 1. OBSERVATION (§1.1) --------------------------------------
@@ -184,6 +186,8 @@ class ReasoningEngine:
                 module="factcheck", subject=claim, outcome=verdict.value,
                 confidence=confidence.value,
                 response=response.model_dump(mode="json"), check_id=response.check_id,
+                # v4.6 §71 — measured wall-clock of the run, ms (latency KPI)
+                latency_ms=round((_time.perf_counter() - _t0) * 1000, 1),
             )
             response.check_id = check_id
             response.graph_url = f"/api/v1/graph/case/{check_id}"

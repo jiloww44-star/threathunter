@@ -137,4 +137,36 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "Parser/source drift — treated as UNVERIFIED, never guessed (§20)",
         "Capture the response and review the parser before trusting it",
     ),
+    # ---- v4.6 measurement closure (adjudication write-paths) ----
+    "REVIEW_NOT_FOUND": (
+        "That review item does not exist",
+        "No decision was recorded",
+        "Refresh the review queue and pick an OPEN item",
+    ),
+    "REVIEW_ALREADY_DECIDED": (
+        "That review has already been decided",
+        "Decisions are single-use — the trail keeps both attempts",
+        "Refresh the queue to see the recorded decision",
+    ),
+    "NOTIFICATION_NOT_FOUND": (
+        "That alert does not exist",
+        "No adjudication was recorded",
+        "Refresh the alerts pane and retry",
+    ),
+    "ALERT_ALREADY_ADJUDICATED": (
+        "That alert has already been adjudicated",
+        "One verdict per alert keeps the false-alarm KPI honest",
+        "The recorded verdict stands and is on the trail",
+    ),
+    "WATCH_NOT_FOUND": (
+        "That journey watch does not exist",
+        "No reroute decision was recorded",
+        "Refresh the watch list and retry",
+    ),
+    "REROUTE_NOT_PENDING": (
+        "That watch has no pending reroute recommendation",
+        "Only a machine recommendation that is still open can be accepted "
+        "or declined",
+        "Wait for a new elevation or start a new watch",
+    ),
 }

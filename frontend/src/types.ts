@@ -511,6 +511,41 @@ export interface OpsNotification {
   body: string;
   ref?: string | null;
   created_at: string;
+  // v4.6 — §71 false-alarm write-path: one analyst verdict per alert
+  adjudication?: "TRUE_POSITIVE" | "FALSE_POSITIVE" | null;
+  adjudicated_by?: string | null;
+  adjudicated_at?: string | null;
+}
+
+// ---------------- v4.6 §71 human-outcome write-paths ----------------
+export interface ReviewItem {
+  id: string;
+  module: string;            // factcheck | kyc | journey | contradictions…
+  case_ref: string;
+  reason: string;
+  risk: string;
+  priority: number;
+  tier?: string | null;
+  status: string;            // OPEN | DECIDED
+  created_at: string;
+  sla_deadline?: string | null;
+  decision?: "CONFIRMED" | "CORRECTED" | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  prior_outcome?: string | null;       // system verdict at decision time
+  corrected_outcome?: string | null;   // analyst's correction, in writing
+}
+
+export interface RerouteRow {
+  watch_id: string;
+  origin: string;
+  destination: string;
+  current_risk: string | null;
+  status: string;                      // MONITORING | ELEVATED | CLOSED
+  reroute_pending: number;             // 1 = awaiting a human answer
+  reroute_outcome: "ACCEPTED" | "DECLINED" | "AUTO_RESOLVED" | null;
+  reroute_decided_at: string | null;
+  updated_at: string;
 }
 
 // ---------------- v4.5 §71/§72 pilot KPI plane ----------------

@@ -1003,3 +1003,13 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
   flex-basis: 100%; font-size: .72rem; color: var(--color-text-dim);
   font-style: italic;
 }
+
+/* ------------- v4.6 §71 human-outcome write-paths ------------- */
+.correction-input {
+  width: 100%; box-sizing: border-box; margin: 0 0 .4rem;
+  padding: .35rem .5rem; font-size: .8rem;
+  background: var(--color-bg-elev, #161616);
+  color: var(--color-text);
+  border: 1px solid var(--color-border, #2a2a2a); border-radius: 6px;
+}
+.correction-input:focus { outline: 1px solid var(--color-accent, #cfff00); }

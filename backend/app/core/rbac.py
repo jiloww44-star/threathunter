@@ -31,6 +31,11 @@ PERMISSIONS: dict[str, str] = {
     "agents.promote": "admin",
     "connectors.manage": "admin",
     "inventory.read": "governance",
+    # v4.6 §71 adjudication write-paths — analyst-floor decisions about
+    # system correctness (corrections, alert veracity, reroutes)
+    "review.decide": "analyst",
+    "alerts.adjudicate": "analyst",
+    "journey.reroute": "analyst",
 }
 
 

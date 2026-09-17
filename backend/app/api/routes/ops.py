@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ...api.deps import current_user, get_db
-from ...core import agent_inventory as agent_inventory_mod
+from ...core import adjudication, agent_inventory as agent_inventory_mod
 from ...core import approvals, assurance, kpis as kpis_mod, rbac, trust_layer
 from ...core.errors import PipelineError
 from ...swarm import cortex, incident, pathfinder, registry
@@ -41,6 +41,20 @@ class GoalRequest(BaseModel):
 class CortexRequest(BaseModel):
     session_id: str = Field(min_length=4, max_length=64)
     message: str = Field(min_length=1, max_length=500)
+
+
+# v4.6 — §71 adjudication payloads
+class ReviewDecisionRequest(BaseModel):
+    decision: str = Field(min_length=3, max_length=20)   # CONFIRMED|CORRECTED
+    corrected_outcome: str | None = Field(default=None, max_length=200)
+
+
+class AlertAdjudicationRequest(BaseModel):
+    verdict: str = Field(min_length=3, max_length=20)    # TRUE|FALSE_POSITIVE
+
+
+class RerouteDecisionRequest(BaseModel):
+    decision: str = Field(min_length=3, max_length=10)   # ACCEPT|DECLINE
 
 
 class CustomAgentRequest(BaseModel):
@@ -415,6 +429,61 @@ async def kpis(db=Depends(get_db)):
                  "production contract (throughput, failure mix, per-agent "
                  "latency, failover count)."),
     }
+
+
+# ------------------------------------------------ v4.6 §71 adjudications --
+@router.post("/ops/review/{review_id}/decide")
+async def decide_review(review_id: str, req: ReviewDecisionRequest,
+                        db=Depends(get_db), user=Depends(current_user)):
+    """Record a human review decision (CONFIRMED / CORRECTED) — the write-
+    path behind analyst_correction_rate and fact_checker.correction_rate."""
+    rbac.require_role(user, "review.decide")
+    return adjudication.decide_review(
+        db, review_id, decision=req.decision,
+        decided_by=user.get("id", "demo"),
+        corrected_outcome=req.corrected_outcome)
+
+
+@router.post("/ops/notifications/{notification_id}/adjudicate")
+async def adjudicate_notification(notification_id: str,
+                                  req: AlertAdjudicationRequest,
+                                  db=Depends(get_db),
+                                  user=Depends(current_user)):
+    """TRUE_POSITIVE / FALSE_POSITIVE on an alert — the write-path behind
+    journey.false_alarm_rate. One verdict per alert, atomically."""
+    rbac.require_role(user, "alerts.adjudicate")
+    return adjudication.adjudicate_alert(
+        db, notification_id, verdict=req.verdict,
+        decided_by=user.get("id", "demo"))
+
+
+@router.post("/ops/watches/{watch_id}/reroute")
+async def decide_reroute(watch_id: str, req: RerouteDecisionRequest,
+                         db=Depends(get_db), user=Depends(current_user)):
+    """Accept or decline a machine reroute recommendation — the write-path
+    behind journey.reroute_acceptance_rate."""
+    rbac.require_role(user, "journey.reroute")
+    d = (req.decision or "").upper()
+    if d not in ("ACCEPT", "DECLINE"):
+        raise PipelineError("INVALID_CONSENT", status=422,
+                            detail="decision must be ACCEPT or DECLINE")
+    return adjudication.decide_reroute(
+        db, watch_id, accept=(d == "ACCEPT"),
+        decided_by=user.get("id", "demo"))
+
+
+@router.get("/ops/watches/reroutes")
+async def list_reroutes(db=Depends(get_db), user=Depends(current_user)):
+    """Pending + recently adjudicated reroute recommendations (journey
+    oversight strip)."""
+    rbac.require_role(user, "read")
+    rows = db.reroute_rows(limit=50)
+    return {"reroutes": rows,
+            "pending": sum(1 for r in rows if r["reroute_pending"]),
+            "note": ("ACCEPTED/DECLINED are human adjudications; "
+                     "AUTO_RESOLVED is the engine retiring its own stale "
+                     "recommendation when risk eases — neither acceptance "
+                     "nor rejection (§71 denominator hygiene).")}
 
 
 @router.get("/ops/kpis/v71")

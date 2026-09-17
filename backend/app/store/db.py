@@ -354,6 +354,54 @@ class EvidenceStore:
             self._conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN region "
                 "TEXT DEFAULT 'GLOBAL'")
+        # ---------------- v4.6 measurement closure (§71 write-paths) --------
+        rq = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(review_queue)")}
+        if "decision" not in rq:
+            # §27 review queue was read-only until v4.6 — humans could not
+            # record CONFIRMED/CORRECTED, so analyst-correction KPIs were
+            # honestly UNAVAILABLE. These columns ARE the correction ledger.
+            self._conn.execute(
+                "ALTER TABLE review_queue ADD COLUMN decision TEXT")
+            self._conn.execute(
+                "ALTER TABLE review_queue ADD COLUMN decided_by TEXT")
+            self._conn.execute(
+                "ALTER TABLE review_queue ADD COLUMN decided_at TEXT")
+            self._conn.execute(
+                "ALTER TABLE review_queue ADD COLUMN prior_outcome TEXT")
+            self._conn.execute(
+                "ALTER TABLE review_queue ADD COLUMN corrected_outcome TEXT")
+        ck = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(checks)")}
+        if "latency_ms" not in ck:
+            # §71 fact-checker latency — measured pipeline wall-clock, ms.
+            self._conn.execute(
+                "ALTER TABLE checks ADD COLUMN latency_ms REAL")
+        jw2 = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(journey_watches)")}
+        if "reroute_pending" not in jw2:
+            # reroute recommendation lifecycle: ELEVATION beyond tolerance
+            # mints a pending recommendation; the operator ACCEPTs or
+            # DECLINEs it — that ratio is §71 reroute acceptance.
+            self._conn.execute(
+                "ALTER TABLE journey_watches ADD COLUMN reroute_pending "
+                "INTEGER DEFAULT 0")
+            self._conn.execute(
+                "ALTER TABLE journey_watches ADD COLUMN reroute_outcome TEXT")
+            self._conn.execute(
+                "ALTER TABLE journey_watches ADD COLUMN reroute_decided_at "
+                "TEXT")
+        nt = {r[1] for r in self._conn.execute(
+            "PRAGMA table_info(notifications)")}
+        if "adjudication" not in nt:
+            # §71 false-alarm rate needs alert outcomes: TRUE_POSITIVE or
+            # FALSE_POSITIVE, adjudicated once, auditably.
+            self._conn.execute(
+                "ALTER TABLE notifications ADD COLUMN adjudication TEXT")
+            self._conn.execute(
+                "ALTER TABLE notifications ADD COLUMN adjudicated_by TEXT")
+            self._conn.execute(
+                "ALTER TABLE notifications ADD COLUMN adjudicated_at TEXT")
 
     def close(self):
         global _store
@@ -546,15 +594,17 @@ class EvidenceStore:
             self._conn.commit()
 
     def record_check(self, module: str, subject: str, outcome: str,
-                     confidence: str, response: dict, check_id: str | None = None) -> str:
+                     confidence: str, response: dict, check_id: str | None = None,
+                     latency_ms: float | None = None) -> str:
         cid = check_id or str(uuid.uuid4())
         with self._lock:
             self._conn.execute(
                 """INSERT INTO checks(id, module, subject, outcome, confidence,
-                    response_json, model_versions, created_at)
-                   VALUES (?,?,?,?,?,?,?,?)""",
+                    response_json, model_versions, created_at, latency_ms)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
                 (cid, module, subject, outcome, confidence,
-                 json.dumps(response), json.dumps(settings.MODEL_VERSIONS), _now()),
+                 json.dumps(response), json.dumps(settings.MODEL_VERSIONS),
+                 _now(), latency_ms),
             )
             self._conn.commit()
         return cid
@@ -1144,7 +1194,8 @@ class EvidenceStore:
         return [dict(r) for r in rows]
 
     def update_watch(self, watch_id: str, current_risk: str | None = None,
-                     status: str | None = None):
+                     status: str | None = None,
+                     reroute_pending: int | None = None):
         with self._lock:
             if current_risk is not None:
                 self._conn.execute(
@@ -1154,7 +1205,83 @@ class EvidenceStore:
                 self._conn.execute(
                     "UPDATE journey_watches SET status=?, updated_at=? "
                     "WHERE watch_id=?", (status, _now(), watch_id))
+            if reroute_pending is not None:
+                # v4.6 — a watch elevated beyond tolerance DOES recommend a
+                # reroute; that recommendation is pending until adjudicated.
+                self._conn.execute(
+                    "UPDATE journey_watches SET reroute_pending=?, "
+                    "updated_at=? WHERE watch_id=?",
+                    (reroute_pending, _now(), watch_id))
             self._conn.commit()
+
+    # --------------------- v4.6 §71 adjudication write-paths ---------------
+    def review_get(self, review_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM review_queue WHERE id=?", (review_id,)
+            ).fetchone()
+        return dict(r) if r else None
+
+    def review_decide(self, review_id: str, *, decision: str, decided_by: str,
+                      prior_outcome: str | None,
+                      corrected_outcome: str | None) -> int:
+        """Atomic single-decision guard (same discipline as approvals):
+        UPDATE … WHERE status='OPEN' — a second human decision returns 0 and
+        the caller 409s; both attempts stay on the audit trail."""
+        with self._lock:
+            cur = self._conn.execute(
+                """UPDATE review_queue SET status='DECIDED', decision=?,
+                   decided_by=?, decided_at=?, prior_outcome=?,
+                   corrected_outcome=?
+                   WHERE id=? AND status='OPEN'""",
+                (decision, decided_by, _now(), prior_outcome,
+                 corrected_outcome, review_id))
+            self._conn.commit()
+            return cur.rowcount
+
+    def notification_get(self, notification_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM notifications WHERE id=?",
+                (notification_id,)).fetchone()
+        return dict(r) if r else None
+
+    def adjudicate_notification(self, notification_id: str, *,
+                                verdict: str, adjudicated_by: str) -> int:
+        """One adjudication per alert (WHERE adjudication IS NULL) — the
+        §71 false-alarm denominator can never be silently rewritten."""
+        with self._lock:
+            cur = self._conn.execute(
+                """UPDATE notifications SET adjudication=?, adjudicated_by=?,
+                   adjudicated_at=? WHERE id=? AND adjudication IS NULL""",
+                (verdict, adjudicated_by, _now(), notification_id))
+            self._conn.commit()
+            return cur.rowcount
+
+    def decide_watch_reroute(self, watch_id: str, *, outcome: str) -> int:
+        """Resolve a PENDING reroute recommendation once (ACCEPTED/DECLINED;
+        AUTO_RESOLVED is the engine's own when risk eases)."""
+        with self._lock:
+            cur = self._conn.execute(
+                """UPDATE journey_watches SET reroute_pending=0,
+                   reroute_outcome=?, reroute_decided_at=?, updated_at=?
+                   WHERE watch_id=? AND reroute_pending=1""",
+                (outcome, _now(), _now(), watch_id))
+            self._conn.commit()
+            return cur.rowcount
+
+    def reroute_rows(self, limit: int = 50) -> list[dict]:
+        """Pending + recently decided reroute recommendations (journey
+        oversight strip in the Governance pane)."""
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT watch_id, origin, destination, current_risk, status,
+                          reroute_pending, reroute_outcome, reroute_decided_at,
+                          updated_at FROM journey_watches
+                   WHERE reroute_pending=1 OR reroute_outcome IS NOT NULL
+                   ORDER BY updated_at DESC LIMIT ?""",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------- §3.4 personalization (presentation only) ----
     def get_prefs(self, user_id: str) -> dict | None:

@@ -87,14 +87,16 @@ class TestKpiShapeAndHonesty:
         _client(tmp_path)
         fams = kpis.compute_kpis(_store())["families"]
         corr = fams["intelligence_quality"]["analyst_correction_rate"]
+        # v4.6: still honest when empty — write-path exists now, but a rate
+        # with zero decisions is undefined, never 0-fabricated
         assert corr["status"] == "UNAVAILABLE"
-        assert corr["value"] is None and "P-3" in corr["basis"]
+        assert corr["value"] is None and "write-path" in corr["basis"]
         # no investigations at all → completion is undefined, not 0.0
         comp = fams["journey"]["completion_rate"]
         assert comp["status"] == "UNAVAILABLE"
-        # genuinely missing write-paths are named, not silently absent
+        # latency with no latency-persisting runs: UNAVAILABLE, named reason
         assert fams["fact_checker"]["latency"]["status"] == "UNAVAILABLE"
-        assert "write-path" in fams["fact_checker"]["latency"]["basis"]
+        assert "latency" in fams["fact_checker"]["latency"]["basis"]
 
     def test_every_value_has_basis(self, tmp_path):
         _client(tmp_path)

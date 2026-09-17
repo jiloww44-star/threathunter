@@ -96,12 +96,13 @@ Pilot success thresholds (recommended):
 | governance.approvals_pending_over_72h | 0 | governance is the bottleneck |
 | intelligence_quality.freshness | hours since newest evidence | staleness beyond your SLA (24h sweeps) |
 
-**Known UNAVAILABLE KPIs in this profile** (reported, never zero-filled):
-`analyst_correction_rate` (no system-vs-human diff persisted — proposal
-P-3), `journey.reroute_acceptance_rate` + `false_alarm_rate` (no operator
-adjudication column), `fact_checker.correction_rate` + `latency`
-(run latency not persisted). If your pilot needs them, instrument the
-write-path first — do not accept a quiet 0.
+**UNAVAILABLE KPIs**: as of v4.6 every spec-named §71 metric has a real
+write-path. UNAVAILABLE now means exactly one thing: *nobody has decided
+anything in the window yet* (empty denominator is undefined, never 0). The
+basis string names the write-path that's awaiting use
+(`/ops/review/{id}/decide`, `/ops/notifications/{id}/adjudicate`,
+`/ops/watches/{id}/reroute`). Alert hygiene for pilots: adjudicate every
+alert, answer every reroute — or accept that the KPI stays honestly blank.
 
 ## 6. Smoke checklist (run after every deploy)
 

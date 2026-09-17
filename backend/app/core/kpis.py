@@ -35,7 +35,7 @@ from . import agent_inventory
 from .nlp_lite import parse_iso
 from .privacy import verify_chain
 
-KPI_ENGINE_VERSION = "kpi-engine/4.5.0"
+KPI_ENGINE_VERSION = "kpi-engine/4.6.0"   # v4.6: five UNAVAILABLE→measured
 DEFAULT_WINDOW_HOURS = int(os.environ.get("TH360_KPI_WINDOW_HOURS", "168"))
 
 
@@ -88,7 +88,7 @@ def _north_star(store) -> dict:
                      "investigations examined, all-time."))}
 
 
-def _intelligence_quality(store, now: datetime) -> dict:
+def _intelligence_quality(store, cutoff: str, now: datetime) -> dict:
     closed = store.kpi_sql(
         "SELECT COUNT(*) c FROM investigations WHERE status='CLOSED'")[0]["c"]
     closed_ev = store.kpi_sql(
@@ -131,12 +131,23 @@ def _intelligence_quality(store, now: datetime) -> dict:
                             "weighs — see fact_checker.coverage."))
                  if ev_rows else
                  _unavail(unit="sources", basis="evidence store empty."))
-    correction = _unavail(
-        unit="ratio",
-        basis=("analyst corrections are not persisted diffs: review_queue "
-               "stores the queue, not system-vs-human verdict deltas. Pilot "
-               "proposal P-3 (persist decided verdict + prior system verdict) "
-               "closes this honestly — until then: UNAVAILABLE, not 0."))
+    dec = store.kpi_sql(
+        """SELECT decision, COUNT(*) c FROM review_queue
+           WHERE status='DECIDED' AND decided_at >= ?
+           GROUP BY decision""", (cutoff,))
+    corrected = sum(r["c"] for r in dec if r["decision"] == "CORRECTED")
+    decided_n = sum(r["c"] for r in dec)
+    correction = (_ok(round(corrected / decided_n, 4), unit="ratio",
+                      sample=decided_n,
+                      basis=("v4.6 measured: CORRECTED ÷ all decided review "
+                             "items in window — every decision carries the "
+                             "system's prior verdict and the analyst's "
+                             "correction in writing (decision_basis diff)."))
+                  if decided_n else
+                  _unavail(unit="ratio",
+                           basis="no review decisions in window — the v4.6 "
+                                 "write-path exists (/ops/review/{id}/decide)"
+                                 "; awaiting analyst decisions."))
     return {"evidence_backed_conclusion_rate": concl,
             "contradiction_detection_rate": contra_rate,
             "contradictions_flagged": _ok(
@@ -145,6 +156,10 @@ def _intelligence_quality(store, now: datetime) -> dict:
                       "all-time."),
             "freshness": freshness,
             "source_diversity": diversity,
+            "reviews_decided_in_window": _ok(
+                decided_n, unit="count", sample=decided_n,
+                basis="review_queue items decided in window (CONFIRMED or "
+                      "CORRECTED), the correction-rate denominator."),
             "analyst_correction_rate": correction}
 
 
@@ -188,27 +203,65 @@ def _journey(store, cutoff: str, now: datetime) -> dict:
     watches = store.kpi_sql(
         """SELECT COUNT(*) c FROM journey_watches
            WHERE status IN ('MONITORING','ELEVATED')""")[0]["c"]
+    rr = store.kpi_sql(
+        """SELECT reroute_outcome, COUNT(*) c FROM journey_watches
+           WHERE reroute_outcome IN ('ACCEPTED','DECLINED')
+             AND reroute_decided_at >= ? GROUP BY reroute_outcome""",
+        (cutoff,))
+    rr_acc = sum(r["c"] for r in rr if r["reroute_outcome"] == "ACCEPTED")
+    rrdec_total = sum(r["c"] for r in rr)
+    acceptance = (_ok(round(rr_acc / rrdec_total, 4), unit="ratio",
+                      sample=rrdec_total,
+                      basis=("v4.6 measured: ACCEPTED ÷ human-decided reroute "
+                             "recommendations in window; AUTO_RESOLVED (risk "
+                             "eased on its own) is excluded from the "
+                             "denominator by design."))
+                  if rrdec_total else
+                  _unavail(unit="ratio",
+                           basis="no human reroute decisions in window — the "
+                                 "v4.6 write-path exists "
+                                 "(/ops/watches/{id}/reroute)."))
+    adj = store.kpi_sql(
+        """SELECT adjudication, COUNT(*) c FROM notifications
+           WHERE adjudication IS NOT NULL AND adjudicated_at >= ?
+           GROUP BY adjudication""", (cutoff,))
+    fp = sum(r["c"] for r in adj if r["adjudication"] == "FALSE_POSITIVE")
+    adj_total = sum(r["c"] for r in adj)
+    false_alarm = (_ok(round(fp / adj_total, 4), unit="ratio",
+                       sample=adj_total,
+                       basis=("v4.6 measured: FALSE_POSITIVE ÷ adjudicated "
+                              "alerts in window; exactly one adjudication "
+                              "per alert (atomic guard), so the denominator "
+                              "can't be silently rewritten."))
+                   if adj_total else
+                   _unavail(unit="ratio",
+                            basis="no alerts adjudicated in window — the "
+                                  "v4.6 write-path exists "
+                                  "(/ops/notifications/{id}/adjudicate)."))
     return {
         "completion_rate": completion,
         "reroute_events": _ok(reroutes, unit="count", sample=reroutes,
                               basis="event:JourneyConditionChanged rows in "
                                     f"window ({cutoff[:10]}…), the §26 "
                                     "reroute signal."),
-        "reroute_acceptance_rate": _unavail(
-            unit="ratio",
-            basis=("watch reroutes carry no accept/decline adjudication by "
-                   "the operator — persisted fact gap, reported honestly.")),
+        "reroutes_pending": _ok(
+            store.kpi_sql("SELECT COUNT(*) c FROM journey_watches "
+                          "WHERE reroute_pending=1")[0]["c"],
+            unit="count", sample=rrdec_total,
+            basis="open machine reroute recommendations awaiting a human "
+                  "decision, right now."),
+        "reroute_acceptance_rate": acceptance,
         "alerts_triggered": _ok(alerts, unit="count", sample=alerts,
                                 basis="event:AlertTriggered in window."),
-        "false_alarm_rate": _unavail(
-            unit="ratio",
-            basis=("alert outcomes (true/false positive) are not adjudicated "
-                   "in the demo profile — no verdict column exists on "
-                   "notifications; this is a stated gap, not a zero.")),
+        "alerts_adjudicated": _ok(adj_total, unit="count", sample=adj_total,
+                                  basis="alerts with a human verdict in "
+                                        "window — the false-alarm "
+                                        "denominator."),
+        "false_alarm_rate": false_alarm,
         "decision_latency": latency,
         "watches_active": _ok(watches, unit="count", sample=watches,
-                              basis="journey_watches rows with status='active'"
-                                    ", all-time state."),
+                              basis="journey_watches MONITORING|ELEVATED, "
+                                    "all-time state."),
     }
 
 
@@ -248,20 +301,41 @@ def _fact_checker(store, cutoff: str) -> dict:
                  if indep else
                  _unavail(unit="independent_sources",
                           basis="no runs in window."))
+    fc_dec = store.kpi_sql(
+        """SELECT decision, COUNT(*) c FROM review_queue
+           WHERE status='DECIDED' AND module='factcheck' AND decided_at >= ?
+           GROUP BY decision""", (cutoff,))
+    fc_corr = sum(r["c"] for r in fc_dec if r["decision"] == "CORRECTED")
+    fc_total = sum(r["c"] for r in fc_dec)
+    lat_rows = store.kpi_sql(
+        """SELECT latency_ms FROM checks
+           WHERE module='factcheck' AND latency_ms IS NOT NULL
+             AND created_at >= ?""", (cutoff,))
+    lats = [r["latency_ms"] for r in lat_rows
+            if isinstance(r["latency_ms"], (int, float))]
     return {
         "runs": _ok(runs, unit="count", sample=runs,
                     basis="checks rows module='factcheck' in window."),
         "evidence_coverage": coverage,
         "agreement": agreement,
-        "correction_rate": _unavail(
-            unit="ratio",
-            basis=("analyst overrides of fact-check verdicts are not "
-                   "persisted as deltas (see intelligence_quality."
-                   "analyst_correction_rate, proposal P-3).")),
-        "latency": _unavail(
-            unit="seconds",
-            basis=("pipeline run latency is not persisted per check — reported"
-                   " honestly as a missing write-path rather than omitted.")),
+        "correction_rate": (_ok(
+            round(fc_corr / fc_total, 4), unit="ratio", sample=fc_total,
+            basis=("v4.6 measured: analyst-CORRECTED ÷ decided factcheck "
+                   "review items in window; prior system verdict persisted "
+                   "on every correction."))
+            if fc_total else
+            _unavail(unit="ratio",
+                     basis="no factcheck review decisions in window — v4.6 "
+                           "write-path exists (/ops/review/{id}/decide).")),
+        "latency": (_ok(
+            round(sum(lats) / len(lats), 1), unit="ms", sample=len(lats),
+            basis=("v4.6 measured: mean persisted pipeline wall-clock of "
+                   "initial fact-check runs in window (reasoning engine "
+                   "perf_counter around the full §1 pipeline)."))
+            if lats else
+            _unavail(unit="ms",
+                     basis="no latency-persisting runs in window (runs "
+                           "pre-dating v4.6 carry no latency_ms).")),
     }
 
 
@@ -396,7 +470,7 @@ def compute_kpis(store, window_hours: int | None = None) -> dict:
         "window_hours": wh,
         "north_star": _north_star(store),
         "families": {
-            "intelligence_quality": _intelligence_quality(store, now),
+            "intelligence_quality": _intelligence_quality(store, cutoff, now),
             "journey": _journey(store, cutoff, now),
             "fact_checker": _fact_checker(store, cutoff),
             "agent_security": _agent_security(store),

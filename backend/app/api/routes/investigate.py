@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ...api.deps import get_db
-from ...core import investigation
+from ...core import chronology, investigation
 
 router = APIRouter(prefix="/api/v1/investigations", tags=["Investigation Core v4"])
 
@@ -85,3 +85,10 @@ async def investigation_graph(inv_id: str, db=Depends(get_db)):
     """§73 V1.5 — the investigation's §5 evidence chain as a GraphData
     node/edge model (renders in the existing EvidenceGraph component)."""
     return investigation.graph(db, inv_id)
+
+
+@router.get("/{inv_id}/chronology")
+async def investigation_chronology(inv_id: str, db=Depends(get_db)):
+    """§67 v4.8 — the case's immutable chronology, derived on read from the
+    permanent trail + link table, committed by a recomputable digest."""
+    return chronology.build_chronology(db, inv_id)

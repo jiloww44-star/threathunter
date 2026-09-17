@@ -5,10 +5,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import type {
-  AgentInfo, CortexReply, DorkSet, GraphData, Incident, Investigation,
-  KpiValue, LiveObservation, LockerResponse, MeshStatus, OpsKpis, OpsKpisV71,
-  OpsNotification, PlanProposal, RecentCheck, RerouteRow, ReviewItem,
-  StrategyMap, TaskStatus, UnifiedReport,
+  AgentInfo, CaseChronology, CortexReply, DorkSet, GraphData, Incident,
+  Investigation, KpiValue, LiveObservation, LockerResponse, MeshStatus,
+  OpsKpis, OpsKpisV71, OpsNotification, PlanProposal, RecentCheck,
+  RerouteRow, ReviewItem, StrategyMap, TaskStatus, UnifiedReport,
 } from "../types";
 import { ConfidenceMeter, ErrorPanel, TrustTag } from "../components/shared";
 import { EvidenceGraph } from "../components/EvidenceGraph";
@@ -367,6 +367,27 @@ export function OpsNode() {
     try {
       const o = await api.observeLive(source, inv.id, inv.subject);
       setCaseObs((s) => ({ ...s, [inv.id]: o }));
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  // v4.8 — §68 replay from stored provenance; §67 chronology viewer
+  const rerunObs = async (inv: Investigation, evidenceId: string) => {
+    setError(null);
+    try {
+      const o = await api.rerunLive(evidenceId);
+      setCaseObs((s) => ({ ...s, [inv.id]: o }));
+    } catch (e) { setError(e as ApiError); }
+  };
+  const [caseChrono, setCaseChrono] =
+    useState<Record<string, CaseChronology | null>>({});
+  const toggleChronology = async (invId: string) => {
+    if (caseChrono[invId]) {
+      setCaseChrono((s) => ({ ...s, [invId]: null }));
+      return;
+    }
+    try {
+      const c = await api.caseChronology(invId);
+      setCaseChrono((s) => ({ ...s, [invId]: c }));
     } catch (e) { setError(e as ApiError); }
   };
 
@@ -1105,6 +1126,11 @@ export function OpsNode() {
                             onClick={() => void toggleCaseGraph(inv.id)}>
                       {caseGraphs[inv.id] ? "Hide graph" : "⛓ Graph"}
                     </button>
+                    <button type="button" className="btn ghost"
+                            title="§67 immutable case chronology, digest-committed"
+                            onClick={() => void toggleChronology(inv.id)}>
+                      {caseChrono[inv.id] ? "Hide chronology" : "🕰 Chronology"}
+                    </button>
                     {inv.status === "OPEN" && (
                       <button type="button" className="btn ghost"
                               onClick={() => void buildCaseDorks(inv)}>
@@ -1197,6 +1223,39 @@ export function OpsNode() {
                     </div>
                   )}
 
+                  {/* v4.8 — §67 chronology expansion */}
+                  {caseChrono[inv.id] && (() => {
+                    const c = caseChrono[inv.id]!;
+                    return (
+                      <div className="live-obs" style={{ marginTop: 8 }}>
+                        <p className="muted" style={{ fontSize: 11 }}>
+                          🕰 <b>{c.event_count}</b> events · digest{" "}
+                          <code className="mono">{c.digest.slice(0, 20)}…</code>
+                          {" "}· recomputed on read — an edited trail yields a
+                          different digest (§67)
+                        </p>
+                        <ul style={{ fontSize: 11, margin: "4px 0 0",
+                                     paddingLeft: 0, listStyle: "none" }}>
+                          {c.events.map((e, i) => (
+                            <li key={i} className="chrono-row">
+                              <code className="mono chrono-kind"
+                                    data-kind={e.kind}>{e.kind}</code>{" "}
+                              <span className="muted">
+                                {e.at.slice(0, 19).replace("T", " ")}
+                              </span>{" "}
+                              <b>{e.action}</b>{" "}
+                              <span className="muted">{e.decision}</span>{" "}
+                              <span style={{ display: "block",
+                                             paddingLeft: "5.2rem" }}>
+                                {e.detail.slice(0, 140)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
+
                   {/* v4.5/4.7 — governed live-observation result */}
                   {caseObs[inv.id] && (() => {
                     const o = caseObs[inv.id]!;
@@ -1212,6 +1271,13 @@ export function OpsNode() {
                           {o.new_evidence
                             ? " · new evidence stored"
                             : " · identical to stored observation"}
+                          {"outcome" in o && (
+                            <span className="verdict-chip"
+                                  data-verdict={o.outcome === "CHANGED"
+                                    ? "MIXED" : "VERIFIED"}>
+                              {" "}replay: {o.outcome}
+                            </span>
+                          )}
                         </p>
                         {o.observed_total !== undefined && (
                           <p style={{ fontSize: 12, margin: "4px 0" }}>
@@ -1246,6 +1312,16 @@ export function OpsNode() {
                           {o.evidence_id?.slice(0, 8)}… ·{" "}
                           {o.provenance.query_url}
                         </p>
+                        {/* v4.8 §68 — replay from stored provenance */}
+                        {o.evidence_id && (
+                          <button type="button" className="btn ghost"
+                                  style={{ fontSize: 11 }}
+                                  title="§68 Re-run: replay from stored provenance and compare hashes"
+                                  onClick={() =>
+                                    void rerunObs(inv, o.evidence_id!)}>
+                            ↻ Re-run observation
+                          </button>
+                        )}
                       </div>
                     );
                   })()}

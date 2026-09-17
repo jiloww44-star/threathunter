@@ -169,4 +169,16 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "or declined",
         "Wait for a new elevation or start a new watch",
     ),
+    # ---- v4.8 chronology & reproducibility ----
+    "EVIDENCE_NOT_FOUND": (
+        "That evidence item does not exist",
+        "Nothing was replayed and nothing is claimed",
+        "Check the evidence id in the Locker or the case graph",
+    ),
+    "REPLAY_NOT_AVAILABLE": (
+        "This evidence cannot be re-run",
+        "Only governed live-source observations record the full §68 replay "
+        "tuple at ingest — seed or imported evidence honestly lacks it",
+        "Run a fresh live observation on the case instead",
+    ),
 }

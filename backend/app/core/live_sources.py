@@ -389,8 +389,9 @@ def _run_observation(store, *, source_key: str, investigation_id: str,
             "event:SourceQueried (DENY)")
         store.audit(actor=actor, action="event:SourceQueried",
                     decision="DENY",
-                    detail=f"{spec['connector_name']} fetch failed "
-                           f"classified {exc.code}: {str(exc.detail)[:200]}",
+                    detail=(f"{spec['connector_name']} fetch for {d} on "
+                            f"{investigation_id} failed classified "
+                            f"{exc.code}: {str(exc.detail)[:160]}"),
                     policy_version=LIVE_SOURCES_VERSION)
         raise
     out = persist_observation(
@@ -490,3 +491,76 @@ def run_rdap_observation(store, *, investigation_id: str, domain: str,
     return _run_observation(store, source_key="rdap",
                             investigation_id=investigation_id,
                             domain=domain, actor=actor)
+
+
+# ------------------------------------------------------------ §68 re-run --
+def _source_key_for_row(row: dict) -> str | None:
+    """Locate the _SOURCES entry a stored evidence row was produced by —
+    identity comes from its provenance (source_id connector name + query
+    url), never from a guess."""
+    source_id = row.get("source_id") or ""
+    name = source_id.split(":", 1)[1] if source_id.startswith(
+        "connector:") else ""
+    url = row.get("url") or ""
+    for key, spec in _SOURCES.items():
+        if name and name.lower() == spec["connector_name"]:
+            return key
+        if spec["url_hint"] in url:
+            return key
+    return None
+
+
+def rerun_observation(store, *, evidence_id: str, actor: str) -> dict:
+    """§68 "Re-run investigation": replay a recorded observation from its
+    own provenance — same query, same source, same case authorization —
+    and compare hashes:
+      UNCHANGED  same result hash (idempotent no-op, says so plainly)
+      CHANGED    new row supersedes + event:ObservationChanged (§67)
+      DEGRADED   classified fetch failure (§20), no result claimed
+    The replay walks the FULL governed path again — a closed or expired
+    case re-runs nothing (§76 applies to replays too)."""
+    row = store.get_evidence(evidence_id)
+    if not row:
+        raise PipelineError("EVIDENCE_NOT_FOUND", status=404,
+                            detail=f"evidence {evidence_id} does not exist.")
+    meta = json.loads(row.get("metadata_json") or "{}")
+    inv_id = meta.get("investigation_id")
+    domain = meta.get("query_domain")
+    source_key = _source_key_for_row(row)
+    if not (inv_id and domain and source_key):
+        raise PipelineError(
+            "REPLAY_NOT_AVAILABLE", status=422,
+            detail=json.dumps({
+                "what_happened": ("this evidence row carries no recorded "
+                                  "live-query provenance (investigation + "
+                                  "query domain + source identity)."),
+                "what_it_means": ("only rows produced by governed live "
+                                  "observations (v4.5+) are re-runnable; "
+                                  "seed/imported evidence honestly says "
+                                  "what it is (§68 records the replayable "
+                                  "tuple at ingest, not after the fact)"),
+                "what_to_do": ("run a fresh live observation on the case "
+                               "instead (POST /osint/live/{source})")}))
+    conn = _active_connector(
+        store, name=_SOURCES[source_key]["connector_name"],
+        url_hint=_SOURCES[source_key]["url_hint"])
+    if not conn:
+        raise PipelineError(
+            "CONNECTOR_NOT_ACTIVE", status=409,
+            detail=("the connector that produced this observation is no "
+                    "longer ACTIVE (retired or never approved) — replays "
+                    "run through the registry too (§80)."))
+    store.audit(actor=actor, action="event:ObservationRerun",
+                decision="ALLOW",
+                detail=(f"replaying {evidence_id[:8]}… "
+                        f"({source_key}/{domain}) against prior hash "
+                        f"{str(meta.get('result_hash'))[:12]}"),
+                policy_version=LIVE_SOURCES_VERSION)
+    out = _run_observation(store, source_key=source_key,
+                           investigation_id=inv_id, domain=domain,
+                           actor=actor)
+    out["re_run"] = True
+    out["replay_of"] = evidence_id
+    out["previous_hash"] = meta.get("result_hash")
+    out["outcome"] = "CHANGED" if out["changed_from"] else "UNCHANGED"
+    return out

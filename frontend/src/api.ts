@@ -7,7 +7,7 @@ import type {
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
   DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
   AgentInventoryResponse, AssuranceStatus, Whoami, Connector,
-  RetentionReport, ReviewItem, RerouteRow, LiveObservation,
+  RetentionReport, ReviewItem, RerouteRow, LiveObservation, CaseChronology,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -87,6 +87,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ investigation_id: investigationId, domain }),
     }),
+  // v4.8 §68 — replay from stored provenance; outcome UNCHANGED | CHANGED
+  rerunLive: (evidenceId: string) =>
+    request<LiveObservation & { re_run: boolean; replay_of: string;
+                                previous_hash: string | null;
+                                outcome: "UNCHANGED" | "CHANGED" }>(
+      "/api/v1/osint/live/rerun", {
+        method: "POST", body: JSON.stringify({ evidence_id: evidenceId }),
+      }),
+  // v4.8 §67 — immutable case chronology, digest-committed
+  caseChronology: (invId: string) =>
+    request<CaseChronology>(`/api/v1/investigations/${invId}/chronology`),
   sourceHealth: () =>
     request<{ sources: Array<{
       source_id: string;

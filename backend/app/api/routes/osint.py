@@ -4,6 +4,8 @@ POST /api/v1/osint/dorks            methodology dork builder (generation only)
 POST /api/v1/osint/forensics/media  SENTINEL A-04 media forensics
 POST /api/v1/osint/live/crtsh       v4.5 first REAL source — PASSIVE CT
                                     observation through the §80 registry
+POST /api/v1/osint/live/rdap        v4.7 RDAP registry-of-record (404 = data)
+POST /api/v1/osint/live/rerun       v4.8 §68 replay from stored provenance
 GET  /api/v1/evidence/locker        search the evidence store with provenance
 
 Honest-degradation contract (§20): the dork builder NEVER executes syntax
@@ -150,3 +152,20 @@ async def rdap_observation(req: CrtshObservationRequest, db=Depends(get_db),
     return live_sources.run_rdap_observation(
         db, investigation_id=req.investigation_id, domain=req.domain,
         actor=user.get("id", "demo"))
+
+
+class RerunRequest(BaseModel):
+    evidence_id: str = Field(min_length=6, max_length=80)
+
+
+@router.post("/osint/live/rerun")
+async def rerun_observation(req: RerunRequest, db=Depends(get_db),
+                            user=Depends(current_user)):
+    """v4.8 §68 "Re-run investigation": replay a recorded live observation
+    from its stored provenance tuple (query/source/params/parser version/
+    authorization/result hash) and report UNCHANGED or CHANGED — the §67
+    change detector is the comparator. Replays walk the full governed path
+    again: closed/expired cases re-run nothing (§76)."""
+    rbac.require_role(user, "investigate.run")
+    return live_sources.rerun_observation(
+        db, evidence_id=req.evidence_id, actor=user.get("id", "demo"))

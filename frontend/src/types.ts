@@ -549,6 +549,28 @@ export interface RerouteRow {
 }
 
 // ---------------- v4.7 governed live-source observations ----------------
+
+// ---------------- v4.8 §67 chronology + §68 replay ----------------
+export interface ChronologyEvent {
+  at: string;
+  actor: string;
+  action: string;            // event:Name | case:Opened | link:<kind>
+  decision: string;
+  kind: string;              // LIFECYCLE | AUTHORIZATION | OBSERVATION | …
+  detail: string;
+  policy_version?: string | null;
+}
+
+export interface CaseChronology {
+  investigation_id: string;
+  subject: string;
+  status: string;
+  chronology_version: string;
+  event_count: number;
+  digest: string;            // recomputed each read — tamper = new digest
+  events: ChronologyEvent[];
+  derivation: string;        // honest scoping statement
+}
 /** Shared envelope for /osint/live/* (crt.sh + RDAP) — per-source facts
  *  under their own keys; provenance + change-detection keys on both. */
 export interface LiveObservation {
@@ -564,6 +586,11 @@ export interface LiveObservation {
   provenance: { source: string; query_url: string; fetched_at: string | null;
                 reproducibility: string };
   degraded: string | null;
+  // v4.8 §68 replay annotations (present only on /osint/live/rerun results)
+  re_run?: boolean;
+  replay_of?: string;
+  previous_hash?: string | null;
+  outcome?: "UNCHANGED" | "CHANGED";
   // crt.sh
   observed_total?: number;
   names?: string[];

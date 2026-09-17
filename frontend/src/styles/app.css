@@ -1013,3 +1013,16 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
   border: 1px solid var(--color-border, #2a2a2a); border-radius: 6px;
 }
 .correction-input:focus { outline: 1px solid var(--color-accent, #cfff00); }
+
+/* ------------- v4.8 §67 chronology ------------- */
+.chrono-row { padding: .18rem 0; border-bottom: 1px dashed rgba(255,255,255,.05); }
+.chrono-kind {
+  display: inline-block; min-width: 5.6rem; font-size: .62rem;
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border, #2a2a2a); border-radius: 4px;
+  padding: .05rem .3rem; text-align: center; margin-right: .25rem;
+}
+.chrono-kind[data-kind="OBSERVATION"] { color: var(--color-accent, #cfff00); }
+.chrono-kind[data-kind="LIFECYCLE"] { color: var(--color-warn, #ffb020); }
+.chrono-kind[data-kind="AUTHORIZATION"] { color: #ff6b6b; }
+.chrono-kind[data-kind="ALERT"] { color: #ffb020; }

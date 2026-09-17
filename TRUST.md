@@ -121,6 +121,12 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 17. v4.8 Chronology & Reproducibility addendum
+
+- **Digest-committed chronology — blast radius: LOW-MEDIUM, review D1.** The digest is the tamper-visibility claim; if the derivation silently padded or dropped history the claim would be hollow. Mitigations: derivation is deterministic and documented in every response (id-matched trail + column-scoped links + case row; no inference beyond string equality); the tamper test edits the store directly and requires a digest flip.
+- **Replay surfaces — blast radius: MEDIUM, review D2.** A replay that bypassed gates would reopen closed authorization windows. Mitigations: replays execute the exact production `_run_observation` path (no shortcut exists — §76 closed-case 403 and §80 retired-connector 409 are test-pinned); REPLAY_NOT_AVAILABLE rows refuse honestly with the missing-tuple named; a failed replay writes zero state and an audited DENY.
+- **ObservationRerun event extension — blast radius: LOW, review D1.** Documented platform extension, §26 list untouched.
+
 ## 16. v4.7 Live Sources II addendum
 
 - **Generalized observation runner — blast radius: MEDIUM, review D2.** The §76→§63→§80→persist path now exists once and every current/future source inherits it; a flaw here multiplies across sources. Mitigations: the same comprehensive gate matrix from v4.5 now runs against BOTH sources (route + core tests); the v4.5 crt.sh response contract is parity-pinned so consumers can't silently inherit drift.

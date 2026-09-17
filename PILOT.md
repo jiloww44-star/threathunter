@@ -71,6 +71,14 @@ curl -X POST localhost:8000/api/v1/investigations -H 'content-type: application/
 curl -X POST localhost:8000/api/v1/osint/live/crtsh \
   -H 'content-type: application/json' -H 'X-TH360-Role: analyst' \
   -d '{"investigation_id":"<inv_id>","domain":"example.com"}'
+
+# 4.3 (v4.7) second source, same governed path — register+approve once more,
+#     then: POST /api/v1/osint/live/rdap with the same body. RDAP answers
+#     from the registry of record; HTTP 404 ("unregistered") is stored as a
+#     HONEST observation — when the name registers later, the content hash
+#     changes, the new row supersedes, and event:ObservationChanged fires
+#     (§67 change detection across BOTH sources; watch the
+#     observation_changes KPI).
 ```
 
 Gate order (each failure is classified, §20): **§76 living-case → §63 scope

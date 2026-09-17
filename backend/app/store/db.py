@@ -1590,6 +1590,28 @@ class EvidenceStore:
                 (source_id, content_hash)).fetchone()
         return row["id"] if row else None
 
+    def latest_live_evidence(self, source_id: str, investigation_id: str,
+                             query_domain: str) -> dict | None:
+        """Most recent live-observation row for one (source, case, domain) —
+        the §67 change-detection baseline. Metadata filtering is Python-side
+        (portable; live rows are few by design)."""
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT id, content_hash, metadata_json, fetched_at
+                   FROM evidence WHERE source_id=?
+                   ORDER BY fetched_at DESC LIMIT 200""",
+                (source_id,)).fetchall()
+        for r in rows:
+            try:
+                meta = json.loads(r["metadata_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if (meta.get("investigation_id") == investigation_id
+                    and meta.get("query_domain") == query_domain):
+                return {"id": r["id"], "content_hash": r["content_hash"],
+                        "fetched_at": r["fetched_at"]}
+        return None
+
     # ------------------------- v4.4 retention sweeper ----------------------
     def delete_notifications_older_than(self, cutoff_iso: str) -> int:
         with self._lock:

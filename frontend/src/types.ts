@@ -548,6 +548,34 @@ export interface RerouteRow {
   updated_at: string;
 }
 
+// ---------------- v4.7 governed live-source observations ----------------
+/** Shared envelope for /osint/live/* (crt.sh + RDAP) — per-source facts
+ *  under their own keys; provenance + change-detection keys on both. */
+export interface LiveObservation {
+  investigation_id: string;
+  domain: string;
+  connector: { id: string; name: string; kind: string };
+  evidence_id: string | null;
+  result_hash: string;
+  new_evidence: boolean;
+  newly_linked: boolean;
+  changed_from: string | null;         // §67 supersedes-pointer when changed
+  osint_class: string;
+  provenance: { source: string; query_url: string; fetched_at: string | null;
+                reproducibility: string };
+  degraded: string | null;
+  // crt.sh
+  observed_total?: number;
+  names?: string[];
+  truncated?: boolean;
+  // rdap
+  registered?: boolean;
+  registrar?: string | null;
+  status?: string[];
+  nameservers?: string[];
+  events?: string[];
+}
+
 // ---------------- v4.5 §71/§72 pilot KPI plane ----------------
 /** One KPI value with its own provenance (§20 applied to telemetry):
  *  status OK = measured from persisted rows (basis says which);

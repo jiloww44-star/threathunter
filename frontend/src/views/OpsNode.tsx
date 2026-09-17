@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import type {
   AgentInfo, CortexReply, DorkSet, GraphData, Incident, Investigation,
-  KpiValue, LockerResponse, MeshStatus, OpsKpis, OpsKpisV71,
+  KpiValue, LiveObservation, LockerResponse, MeshStatus, OpsKpis, OpsKpisV71,
   OpsNotification, PlanProposal, RecentCheck, RerouteRow, ReviewItem,
   StrategyMap, TaskStatus, UnifiedReport,
 } from "../types";
@@ -353,6 +353,20 @@ export function OpsNode() {
     try {
       const g = await api.investigationGraph(invId);
       setCaseGraphs((s) => ({ ...s, [invId]: g }));
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  // v4.5/4.7 — governed live observations bound to the case (§80 registry;
+  // failures surface through the global ErrorPanel with their classified
+  // next step, per the §20 contract).
+  const [caseObs, setCaseObs] =
+    useState<Record<string, LiveObservation | null>>({});
+  const observeCase = async (inv: Investigation,
+                             source: "crtsh" | "rdap") => {
+    setError(null);
+    try {
+      const o = await api.observeLive(source, inv.id, inv.subject);
+      setCaseObs((s) => ({ ...s, [inv.id]: o }));
     } catch (e) { setError(e as ApiError); }
   };
 
@@ -1097,6 +1111,22 @@ export function OpsNode() {
                         {caseDorks[inv.id] ? "Hide dorks" : "🔎 Build dorks"}
                       </button>
                     )}
+                    {/* v4.5/4.7 — PASSIVE live reads via the §80 registry,
+                        domain cases only (scope is the case subject's cone) */}
+                    {inv.status === "OPEN" && inv.subject_type === "domain" && (
+                      <>
+                        <button type="button" className="btn ghost"
+                                title="PASSIVE Certificate Transparency read through the connector registry"
+                                onClick={() => void observeCase(inv, "crtsh")}>
+                          📡 Observe CT
+                        </button>
+                        <button type="button" className="btn ghost"
+                                title="PASSIVE registry-of-record (RDAP) read through the connector registry"
+                                onClick={() => void observeCase(inv, "rdap")}>
+                          🛰 Observe RDAP
+                        </button>
+                      </>
+                    )}
                     {inv.status === "OPEN" && (
                       <button type="button" className="btn ghost"
                               onClick={() => closeCase(inv.id)}>
@@ -1166,6 +1196,59 @@ export function OpsNode() {
                       </table>
                     </div>
                   )}
+
+                  {/* v4.5/4.7 — governed live-observation result */}
+                  {caseObs[inv.id] && (() => {
+                    const o = caseObs[inv.id]!;
+                    return (
+                      <div className="live-obs" style={{ marginTop: 8 }}>
+                        <p className="muted" style={{ fontSize: 11 }}>
+                          🛰 <strong>{o.provenance.source}</strong> ·{" "}
+                          {o.osint_class}
+                          {o.changed_from && (
+                            <span className="verdict-chip"
+                                  data-verdict="MIXED"> CHANGED</span>
+                          )}
+                          {o.new_evidence
+                            ? " · new evidence stored"
+                            : " · identical to stored observation"}
+                        </p>
+                        {o.observed_total !== undefined && (
+                          <p style={{ fontSize: 12, margin: "4px 0" }}>
+                            CT names observed: <b>{o.observed_total}</b>
+                            {o.truncated ? " (truncated at 100)" : ""}
+                            {(o.names ?? []).length > 0 && (
+                              <span className="muted"> —{" "}
+                                {(o.names ?? []).slice(0, 5).join(", ")}
+                                {(o.names ?? []).length > 5 ? "…" : ""}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                        {o.registered !== undefined && (
+                          <p style={{ fontSize: 12, margin: "4px 0" }}>
+                            {o.registered ? (
+                              <>Registered — registrar{" "}
+                                <b>{o.registrar ?? "unparsed"}</b>
+                                {(o.nameservers ?? []).length > 0 && (
+                                  <span className="muted"> · ns:{" "}
+                                    {(o.nameservers ?? []).slice(0, 3)
+                                      .join(", ")}</span>
+                                )}
+                              </>
+                            ) : (
+                              <b>NOT registered in the registry of record</b>
+                            )}
+                          </p>
+                        )}
+                        <p className="muted mono" style={{ fontSize: 10 }}>
+                          hash {o.result_hash.slice(0, 16)}… · evidence{" "}
+                          {o.evidence_id?.slice(0, 8)}… ·{" "}
+                          {o.provenance.query_url}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

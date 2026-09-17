@@ -134,3 +134,19 @@ async def crtsh_observation(req: CrtshObservationRequest, db=Depends(get_db),
     return live_sources.run_crtsh_observation(
         db, investigation_id=req.investigation_id, domain=req.domain,
         actor=user.get("id", "demo"))
+
+
+@router.post("/osint/live/rdap")
+async def rdap_observation(req: CrtshObservationRequest, db=Depends(get_db),
+                           user=Depends(current_user)):
+    """v4.7 — second live source: PASSIVE registry-of-record lookup via
+    rdap.org (IANA bootstrap), same governed path as crt.sh (§80 registry,
+    §76 → §63 → ACTIVE on-allowlist → §67 change detection).
+
+    A 404 from the registry is an honest observation (domain unregistered),
+    stored with its own hash — registration later flips ObservationChanged.
+    """
+    rbac.require_role(user, "investigate.run")
+    return live_sources.run_rdap_observation(
+        db, investigation_id=req.investigation_id, domain=req.domain,
+        actor=user.get("id", "demo"))

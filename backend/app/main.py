@@ -92,11 +92,11 @@ async def readyz():
 async def root():
     return {
         "product": "ThreatHunter360",
-        "version": "4.6.0 MEASUREMENT CLOSURE",
+        "version": "4.7.0 LIVE SOURCES II",
         "planes": ["4.0 Intelligence Core", "4.1 Forensics & Evidence",
                    "4.2 Governance Planes", "4.3 Continuous Assurance",
                    "4.4 Enterprise Plane", "4.5 Pilot Readiness",
-                   "4.6 Measurement Closure"],
+                   "4.6 Measurement Closure", "4.7 Live Sources II"],
         "modules": ["factcheck", "journey", "kyc", "ops-node", "cortex",
                     "investigations", "osint", "kpis", "live-sources"],
         "agents": ["VOYAGER", "SENTINEL", "SENTINEL_FORENSICS", "HUNTER",

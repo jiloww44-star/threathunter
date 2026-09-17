@@ -121,6 +121,13 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 16. v4.7 Live Sources II addendum
+
+- **Generalized observation runner — blast radius: MEDIUM, review D2.** The §76→§63→§80→persist path now exists once and every current/future source inherits it; a flaw here multiplies across sources. Mitigations: the same comprehensive gate matrix from v4.5 now runs against BOTH sources (route + core tests); the v4.5 crt.sh response contract is parity-pinned so consumers can't silently inherit drift.
+- **Canonical-subset hashing — blast radius: MEDIUM, review D2.** If the detector both under- and over-fires, trust inverts: noisy change alerts train operators to ignore them; missed changes hide lookalike-registration campaigns. Mitigations: the hash commits ONLY to observed canonical fields (registrar/status/nameservers/events), registry fluff is excluded AND test-pinned; change events carry both hashes and both evidence ids — falsifiable by inspection.
+- **404-as-data rule — blast radius: LOW-MEDIUM, review D1.** Treating "unregistered" as an observation is a semantic commitment: we never report it as a fetch failure (and never let SOURCE_UNREACHABLE masquerade as "not found" — 404 comes only from the registry's own HTTP status, every other failure is its classified code).
+- **ObservationChanged event extension — blast radius: LOW, review D1.** Documented platform extension (§26 list untouched), supersede chains are append-only.
+
 ## 15. v4.6 Measurement Closure addendum
 
 - **Adjudication write-paths — blast radius: MEDIUM, review D2.** Human-outcome records now feed five §71 KPIs; a corrupt adjudication poisons the denominator. Mitigations: every decision is an atomic single-write (second attempt 409s with the recorded verdict named — approvals-engine parity); CORRECTED decisions require the correction in writing (validator, not convention); prior system verdicts are captured at decision time from the system's own persisted rows, never recollected later; denied/expired flows touched zero existing paths (additions only).

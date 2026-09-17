@@ -148,6 +148,14 @@ def _intelligence_quality(store, cutoff: str, now: datetime) -> dict:
                            basis="no review decisions in window — the v4.6 "
                                  "write-path exists (/ops/review/{id}/decide)"
                                  "; awaiting analyst decisions."))
+    live_obs = store.kpi_sql(
+        """SELECT COUNT(*) c FROM audit_trail
+           WHERE action='event:ObservationReceived' AND created_at >= ?""",
+        (cutoff,))[0]["c"]
+    obs_changes = store.kpi_sql(
+        """SELECT COUNT(*) c FROM audit_trail
+           WHERE action='event:ObservationChanged' AND created_at >= ?""",
+        (cutoff,))[0]["c"]
     return {"evidence_backed_conclusion_rate": concl,
             "contradiction_detection_rate": contra_rate,
             "contradictions_flagged": _ok(
@@ -156,6 +164,16 @@ def _intelligence_quality(store, cutoff: str, now: datetime) -> dict:
                       "all-time."),
             "freshness": freshness,
             "source_diversity": diversity,
+            "live_observations": _ok(
+                live_obs, unit="count", sample=live_obs,
+                basis="v4.5/4.7 governed live-source observations in window "
+                      "(§26 event:ObservationReceived; crt.sh + RDAP via the "
+                      "§80 registry)."),
+            "observation_changes": _ok(
+                obs_changes, unit="count", sample=obs_changes,
+                basis="§67 source-change detections in window — a new "
+                      "content hash supersedes the previous row and fires "
+                      "ObservationChanged (registry extension, documented)."),
             "reviews_decided_in_window": _ok(
                 decided_n, unit="count", sample=decided_n,
                 basis="review_queue items decided in window (CONFIRMED or "

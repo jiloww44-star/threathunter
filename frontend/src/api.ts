@@ -7,7 +7,7 @@ import type {
   StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
   DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
   AgentInventoryResponse, AssuranceStatus, Whoami, Connector,
-  RetentionReport, ReviewItem, RerouteRow,
+  RetentionReport, ReviewItem, RerouteRow, LiveObservation,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -80,6 +80,13 @@ export const api = {
   reroutes: () =>
     request<{ reroutes: RerouteRow[]; pending: number; note: string }>(
       "/api/v1/ops/watches/reroutes"),
+  // ---- v4.5/4.7 governed live observations (§80 registry-backed) ----
+  observeLive: (source: "crtsh" | "rdap", investigationId: string,
+                domain: string) =>
+    request<LiveObservation>(`/api/v1/osint/live/${source}`, {
+      method: "POST",
+      body: JSON.stringify({ investigation_id: investigationId, domain }),
+    }),
   sourceHealth: () =>
     request<{ sources: Array<{
       source_id: string;

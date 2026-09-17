@@ -15,8 +15,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api.routes import (admin, factcheck, feed, graph, journey, kyc, ops,
-                         privacy, voice)
+from .api.routes import (admin, factcheck, feed, graph, investigate, journey,
+                         kyc, ops, privacy, voice)
 from .core.errors import ERROR_MAP, PipelineError
 from .store.db import get_store
 
@@ -88,16 +88,17 @@ async def readyz():
 async def root():
     return {
         "product": "ThreatHunter360",
-        "version": "3.0.0 SOVEREIGN FUSION",
-        "modules": ["factcheck", "journey", "kyc", "ops-node", "cortex"],
+        "version": "4.0.0 INTELLIGENCE CORE",
+        "modules": ["factcheck", "journey", "kyc", "ops-node", "cortex",
+                    "investigations"],
         "agents": ["VOYAGER", "SENTINEL", "SENTINEL_FORENSICS", "HUNTER",
                    "AUDITOR"],
         "docs": "/docs",
-        "spec": "ThreatHunter360 v3.0 — SOVEREIGN FUSION Upgrade "
-                "Specification.md",
+        "spec": "ThreatHunter360 v4.0 — Intelligence Platform Analysis & "
+                "Architecture.md",
     }
 
 
 for module in (factcheck, journey, kyc, feed, graph, voice, admin, ops,
-               privacy):
+               privacy, investigate):
     app.include_router(module.router)

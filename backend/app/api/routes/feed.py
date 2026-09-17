@@ -48,3 +48,53 @@ async def statistics(db=Depends(get_db), user=Depends(current_user)):
         freshness[r[0]] = round(lag, 1)
     stats["source_freshness_lag_min"] = freshness
     return stats
+
+
+# v4.0 §6/§32 — Source Health Monitor: every connector carries one of the
+# deterministic lifecycle states. The mapping below is code, not judgment
+# (§54); notes from upsert_source_meta/update_source_health are the audit.
+SOURCE_HEALTH_STATES = ("ACTIVE", "DEGRADED", "AUTH_REQUIRED",
+                        "SCHEMA_CHANGED", "DEPRECATED", "UNAVAILABLE")
+
+
+def _health_state(meta: dict) -> str:
+    note = (meta.get("health_note") or "").upper()
+    if "DEPRECATED" in note:
+        return "DEPRECATED"
+    if "SCHEMA" in note:
+        return "SCHEMA_CHANGED"
+    if "AUTH" in note or "401" in note or "403" in note:
+        return "AUTH_REQUIRED"
+    score = meta.get("health_score")
+    if score is None:
+        # no scorecard yet — judge only by last outcome (§20 honesty)
+        return "ACTIVE" if meta.get("last_success_at") else "DEGRADED"
+    if score < 0.4:
+        return "UNAVAILABLE"
+    if score < 0.7:
+        return "DEGRADED"
+    return "ACTIVE"
+
+
+@router.get("/source-health")
+async def source_health(db=Depends(get_db), user=Depends(current_user)):
+    """§6/§32 Source Health Monitor — per-connector lifecycle state:
+    ACTIVE | DEGRADED | AUTH_REQUIRED | SCHEMA_CHANGED | DEPRECATED |
+    UNAVAILABLE. Drives the governance console; degraded sources are
+    disclosed in reports, never silently dropped (§20)."""
+    out = []
+    for m in sorted(db.all_source_meta(),
+                    key=lambda m: m.get("source_id", "")):
+        out.append({
+            "source_id": m.get("source_id"),
+            "state": _health_state(m),
+            "health_score": m.get("health_score"),
+            "note": m.get("health_note") or m.get("last_error") or "",
+            "checked_at": m.get("health_checked_at"),
+            "last_success_at": m.get("last_success_at"),
+            "authority": m.get("authority"),
+        })
+    states_sorted = sorted({r["state"] for r in out})
+    return {"sources": out, "count": len(out),
+            "states_present": states_sorted,
+            "states_vocabulary": list(SOURCE_HEALTH_STATES)}

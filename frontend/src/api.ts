@@ -4,7 +4,7 @@ import type {
   ConsentStateView, CortexReply, FactCheckResponse, GraphData, IdAuditResult,
   Incident, JourneyResponse, KYCResponse, KYCFixture, MeshStatus, OpsKpis,
   OpsNotification, PlanProposal, Prefs, RecentCheck, RegionsView, Statistics,
-  StrategyMap, StreamResponse, TreeSummary, UnifiedReport,
+  StrategyMap, StreamResponse, TreeSummary, UnifiedReport, Investigation,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -77,10 +77,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, message }),
     }),
-  opsGoal: (goal: string) =>
+  opsGoal: (goal: string, investigationId?: string | null) =>
     request<UnifiedReport>("/api/v1/ops/goal", {
       method: "POST",
-      body: JSON.stringify({ goal }),
+      body: JSON.stringify(
+        investigationId ? { goal, investigation_id: investigationId } : { goal }),
     }),
   opsTree: (treeId: string) =>
     request<StrategyMap>(`/api/v1/ops/tree/${treeId}`),
@@ -124,10 +125,11 @@ export const api = {
     }),
 
   // ---- v3.2 safety-by-design: plan gate, halt, crisis, data ramps ----
-  planGoal: (goal: string) =>
+  planGoal: (goal: string, investigationId?: string | null) =>
     request<PlanProposal>("/api/v1/ops/plan", {
       method: "POST",
-      body: JSON.stringify({ goal }),
+      body: JSON.stringify(
+        investigationId ? { goal, investigation_id: investigationId } : { goal }),
     }),
   approveTree: (treeId: string) =>
     request<UnifiedReport>(`/api/v1/ops/tree/${treeId}/approve`, {
@@ -169,6 +171,38 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ identity, identifier_type: identifierType }),
     }),
+
+  // ---- v4.0 §2 Investigation Core — the §63 authorization object ----
+  createInvestigation: (body: {
+    objective: string; subject_type: string; subject: string;
+    purpose: string; authority: string; scope?: string;
+    allowed_sources?: string[]; expires_days?: number; user_id?: string;
+  }) =>
+    request<Investigation>("/api/v1/investigations", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listInvestigations: (userId?: string) =>
+    request<{ investigations: Investigation[] }>(
+      `/api/v1/investigations${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`),
+  getInvestigation: (invId: string) =>
+    request<Investigation>(`/api/v1/investigations/${invId}`),
+  linkInvestigation: (invId: string, kind: string, refId: string) =>
+    request<{ link_id: string }>(`/api/v1/investigations/${invId}/link`, {
+      method: "POST",
+      body: JSON.stringify({ kind, ref_id: refId }),
+    }),
+  closeInvestigation: (invId: string, reason = "") =>
+    request<Investigation>(`/api/v1/investigations/${invId}/close`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  sourceHealthMonitor: () =>
+    request<{ sources: Array<{ source_id: string; state: string;
+      health_score: number | null; note: string; checked_at: string | null;
+      last_success_at: string | null; authority: string | null }>;
+      count: number; states_present: string[];
+      states_vocabulary: string[] }>("/api/v1/feed/source-health"),
 };
 
 export interface ApiError {

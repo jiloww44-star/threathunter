@@ -217,6 +217,30 @@ CREATE TABLE IF NOT EXISTS consent_ledger (     -- §5.3 immutable consent log
 CREATE INDEX IF NOT EXISTS idx_consent_user ON consent_ledger(user_id, purpose);
 
 -- v3.2 Safety-by-design (UX review blockers E/G)
+CREATE TABLE IF NOT EXISTS investigations (      -- v4.0 §2 primary object
+    id TEXT PRIMARY KEY,
+    objective TEXT,
+    subject_type TEXT,                    -- person|organization|domain|ip|url|location|claim|agent
+    subject TEXT,
+    purpose TEXT,                         -- §63 why this investigation exists
+    authority TEXT,                       -- organization_owned|client_authorized|public_research|unchecked
+    scope TEXT,                           -- bounded scope statement (§63)
+    allowed_sources_json TEXT DEFAULT '[]',  -- connector allowlist; [] = open public tier
+    expires_at TEXT,                      -- authorization expiry (§63) — hard gate
+    status TEXT DEFAULT 'OPEN',           -- OPEN | CLOSED
+    user_id TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS investigation_links ( -- §5 evidence chain linkage
+    id TEXT PRIMARY KEY,
+    investigation_id TEXT,
+    kind TEXT,       -- ops_tree | evidence | watch | finding | verification_case
+    ref_id TEXT,
+    created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS declared_incidents (  -- functional crisis pathway
     incident_id TEXT PRIMARY KEY,
     severity TEXT,          -- SEV1 | SEV2 | SEV3
@@ -1169,6 +1193,77 @@ class EvidenceStore:
             rows = self._conn.execute("SELECT user_id FROM user_preferences"
                                       ).fetchall()
         return [self.get_prefs(r[0]) for r in rows]
+
+    # ------------------------- v4.0 §2 Investigation Core -----------------
+    def inv_create(self, inv_id: str, objective: str, subject_type: str,
+                   subject: str, purpose: str, authority: str, scope: str,
+                   allowed_sources_json: str, expires_at: str, status: str,
+                   user_id: str):
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO investigations(id, objective, subject_type,
+                       subject, purpose, authority, scope, allowed_sources_json,
+                       expires_at, status, user_id, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (inv_id, objective, subject_type, subject, purpose, authority,
+                 scope, allowed_sources_json, expires_at, status, user_id,
+                 _now(), _now()))
+            self._conn.commit()
+
+    @staticmethod
+    def _inv_row(r) -> dict:
+        d = dict(r)
+        d["allowed_sources"] = json.loads(
+            d.pop("allowed_sources_json", None) or "[]")
+        return d
+
+    def inv_get(self, inv_id: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM investigations WHERE id=?",
+                (inv_id,)).fetchone()
+        if not r:
+            return None
+        d = self._inv_row(r)
+        d["links"] = self.inv_links_for(inv_id)
+        return d
+
+    def inv_list(self, user_id: str | None = None,
+                 limit: int = 50) -> list[dict]:
+        with self._lock:
+            sql = "SELECT * FROM investigations"
+            args: tuple = ()
+            if user_id:
+                sql += " WHERE user_id=?"
+                args = (user_id,)
+            sql += " ORDER BY created_at DESC LIMIT ?"
+            rows = self._conn.execute(sql, (*args, limit)).fetchall()
+        return [self._inv_row(r) for r in rows]
+
+    def inv_set_status(self, inv_id: str, status: str):
+        with self._lock:
+            self._conn.execute(
+                "UPDATE investigations SET status=?, updated_at=? WHERE id=?",
+                (status, _now(), inv_id))
+            self._conn.commit()
+
+    def inv_link(self, link_id: str, inv_id: str, kind: str, ref_id: str):
+        """§5 evidence chain: link any artifact (tree, evidence, watch,
+        case) to the investigation that authorizes it."""
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO investigation_links(id, investigation_id, kind,
+                       ref_id, created_at) VALUES (?,?,?,?,?)""",
+                (link_id, inv_id, kind, ref_id, _now()))
+            self._conn.commit()
+
+    def inv_links_for(self, inv_id: str) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT id, kind, ref_id, created_at FROM investigation_links
+                   WHERE investigation_id=? ORDER BY created_at""",
+                (inv_id,)).fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------- §5.3 consent ledger (append-only chain) ----
     def consent_append(self, entry_id: str, user_id: str, purpose: str,

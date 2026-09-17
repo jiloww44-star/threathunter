@@ -73,6 +73,7 @@ cd backend && python -m pytest tests
 | **v3.1** §5.4 Access parity | `frontend/src/hooks/useBandwidth.ts` + Settings view — auto (Save-Data/2G) or manual low-bandwidth mode; JourneyMap degrades to a text-first risk strip |
 | **v3.2** Safety-by-design | UX review blockers closed: Plan Review gate (`/ops/plan`→`/approve`), Halt Execution (cooperative drain, HALTED states), report/data deletion, functional Incident Declaration (webhook-honest delivery), AUDITOR ethics gate (private-target + jailbreak refusals pre-decomposition), AI-output disclaimer everywhere, safety-event learning loop in KPIs — mapping: `design/Safety-Review-v3.2.md` |
 | **v3.3** Sovereign Ops Node (blueprint v5.2 "Tactical Swarm Edition") | Tactical HUD reskin (#020408 / lime #CFFF00 / teal #1A5454 / red #DC2626; Space Grotesk·Inter·JetBrains Mono), mobile bottom-nav, **Sovereign Data Stream** (`/ops/stream` — persisted audit rows + honestly-labelled live heartbeat pulses), **id_audit_l1** (`/privacy/id-audit` — VOYAGER L1 domain/carrier integrity, hedged PASS/REVIEW/FAIL, UNKNOWN ≠ PASS), identity-intel RGD fan-out (HUNTER→VOYAGER→AUDITOR with identifier-first entity extraction), **4-step onboarding wizard**, **Govern tab** with transparent **Compliance Index** (`/privacy/compliance-index`, 4×25 indicator — not a certification) — mapping: `design/SovereignOps-v5.2.md` |
+| **v4.0** INTELLIGENCE CORE | **Investigation as the primary object** (`core/investigation.py` + `investigations`/`investigation_links` tables + `routes/investigate.py`): every case carries a §63 authorization object (purpose, subject, authority, scope, allowed sources, expiry ≤90d). **§35/§76 gate**: `authorize_run()` runs in PATHFINDER *before any tree exists* — closed/expired plans get classified 403s, allowlist denials name the denied source families, a refused plan leaves zero tree rows; §26 events (`InvestigationCreated/EvidenceLinked/InvestigationClosed/AuthorizationDenied/AuthorizationExpired`) live on the single audit trail. **§70 epistemic block** on every UnifiedReport (Observed/Interpreted/Assessed/Recommended). **§49-51 Coverage axis** beside Confidence on every fact check (`coverage` + `coverage_basis`, deterministic HIGH/MEDIUM/LOW — never a single "risk %"). **§6/§32 Source Health Monitor**: `/feed/source-health` with the 6-state vocabulary. Ops Node gains a **Cases tab** (create/activate/link tree/close) — mapping: `design/IntelCore-v4.0.md` |
 | **v3.5** Crisis focus + field manual (deferrals #10/#1) | **Crisis-focus mode**: active incidents carry the 6-step checklist + honest guidance on the *poll* (not just declare), Ops Node restricts panes to essentials (stream/alerts), motion is suppressed, checklist is interactive (local, guidance-only — "not a substitute for your runbook"). **Field Manual** (`docs/field-manual/`): three operator drills against automation bias / control loss / data sovereignty, linked from onboarding step 4. **Demo script**: `docs/demo-video-script.md` — 3-minute shot list on the zero-key demo profile |
 | **v3.4** Red-team hardening (deferrals #3/#9) | **Cortex crisis-signal detection**: live-incident language prepends an honest notice, returns a `declare_incident` action hint (one-click pathway, never cosmetic), drills/tabletop phrasing suppressed; logged to the safety learning loop once per session. **Region-aware consent defaults**: declared region catalogue (GLOBAL/EU_UK/NG opt-in · US opt-out), explicit ledger entries always win, biometrics stay opt-in in every region, effective state + origin shown honestly in the Govern tab; personalization gate reads the effective state. **VOYAGER API schema**: `docs/api/VOYAGER.md` — full function/governance/degradation contract |
 
@@ -81,17 +82,19 @@ cd backend && python -m pytest tests
 ```
 backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
   app/api/routes/  factcheck · journey · kyc · feed · graph · voice · admin · ops
+                    · investigate (v4.0)
   app/core/        reasoning_engine · confidence · contradictions · journey · kyc
-                    · trust_layer (v3.0) · review_routing
+                    · trust_layer (v3.0) · review_routing · investigation (v4.0)
   app/swarm/       v3.0 — pathfinder · cortex · registry · agents/{voyager,
                     sentinel, hunter, auditor}
   app/scraper/     fetcher · extractor (JSON-LD first) · dedupe (simhash) · orchestrator
   app/store/       evidence/signals/hypotheses/checks/review_queue +
                     v3.0 ops_trees/ops_tasks/notifications/audit_trail/
                     custom_agents/journey_watches
-  tests/           165 tests (engine / journey / kyc / API / geo / governance /
+  tests/           196 tests (engine / journey / kyc / API / geo / governance /
                     sovereign-fusion / privacy-personalization /
-                    safety-by-design / sovereign-ops / v3.4+3.5 hardening)
+                    safety-by-design / sovereign-ops / v3.4+3.5 hardening /
+                    intelligence-core v4.0)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)

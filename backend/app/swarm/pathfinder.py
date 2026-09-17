@@ -24,6 +24,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from ..core import investigation
 from ..models.schemas import Confidence, JourneyRequest
 from ..store.db import EvidenceStore
 from . import registry, safety
@@ -711,7 +712,30 @@ def synthesize(goal: str, tasks: list[dict], results: dict[str, dict]
                    AWAITING_HUMAN if awaiting_human else
                    DEGRADED if degraded else "COMPLETE")
 
+    # v4.0 §70 — reports separate the epistemic layers. Observed (evidence),
+    # Interpreted (inference), Assessed (confidence-scoped), Recommended —
+    # never blended into one number or one stream of text (§49-51).
+    epistemic = {
+        "observed": [e["text"] for e in key_evidence
+                     if e.get("trust_label") == "EVIDENCE"],
+        "interpreted": [e["text"] for e in key_evidence
+                        if e.get("trust_label") != "EVIDENCE"]
+        + ["report interpretation: " +
+           ("INFERENCE: governed agent outputs combined conservatively.")],
+        "assessed": {
+            "confidence": overall,
+            "confidence_axis": ("weakest-link combination of per-agent "
+                                "confidences — one axis, never a single "
+                                "'risk %' (§49-51)"),
+            "contradiction_count": len(contradictions),
+            "degraded_branch_count": len(degraded),
+        },
+        "recommended": [a for a in actions if a]
+        or ["No action required beyond review."],
+    }
+
     return {
+        "epistemic": epistemic,
         # ---- canonical spine (spec §6) ----
         "answer": " ".join(a for a in answers if a),
         "confidence": overall,
@@ -786,13 +810,27 @@ def _cost_warning(tasks: list[dict], goal: str) -> str | None:
 
 
 def propose_plan(goal: str, store: EvidenceStore,
-                 context: dict | None = None) -> dict:
+                 context: dict | None = None,
+                 investigation_id: str | None = None,
+                 user_id: str = "operator") -> dict:
     """v3.2 checklist D / flow #1 — Plan Review gate. Decomposition WITHOUT
-    execution: the user reviews the Strategy Map and explicitly approves."""
+    execution: the user reviews the Strategy Map and explicitly approves.
+
+    v4.0 §2/§35 — when an investigation_id is supplied, the §63
+    authorization object is enforced BEFORE any tree exists: expired,
+    closed, or out-of-scope runs raise classified 403s (§76 invariant:
+    no consequential action without authorization)."""
     tree_id = str(uuid.uuid4())[:12]
     peer = MESH.primary_id()
     tasks = decompose(goal, context)
+    if investigation_id:
+        intents = classify_goal(goal)
+        investigation.authorize_run(store, investigation_id,
+                                    branches=intents, user_id=user_id)
     store.create_tree(tree_id, goal, dispatch_plan(tasks), peer)
+    if investigation_id:
+        investigation.link(store, investigation_id, "ops_tree", tree_id,
+                           actor=user_id)
     store.update_tree(tree_id, status=PROPOSED)
     for t in tasks:
         t["status"] = PENDING
@@ -805,6 +843,7 @@ def propose_plan(goal: str, store: EvidenceStore,
     return {
         "tree_id": tree_id, "status": PROPOSED, "goal": goal,
         "peer_id": peer,
+        "investigation_id": investigation_id,
         "plan": [{"agent": t["agent"], "function": t["function"],
                   "title": t["title"],
                   "parent": bool(t.get("parent_id"))} for t in tasks],
@@ -873,11 +912,15 @@ def halt_tree(tree_id: str, store: EvidenceStore,
 
 
 async def run_goal(goal: str, store: EvidenceStore,
-                   context: dict | None = None) -> dict:
+                   context: dict | None = None,
+                   investigation_id: str | None = None,
+                   user_id: str = "operator") -> dict:
     """One-shot free-text goal → executable task tree → UnifiedReport.
     (Cortex dialogue path — conversation is the consent surface; use
-    propose_plan for the gated Ops Node flow, checklist D.)"""
-    plan = propose_plan(goal, store, context)
+    propose_plan for the gated Ops Node flow, checklist D.)
+    v4.0 §2: binds to an investigation's authorization when given."""
+    plan = propose_plan(goal, store, context,
+                        investigation_id=investigation_id, user_id=user_id)
     return await execute_tree(plan["tree_id"], store)
 
 

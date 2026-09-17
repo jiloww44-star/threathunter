@@ -110,6 +110,10 @@ class FactCheckResponse(IntelligenceResponse):
     # Part 18 D1 — where this verdict went after scoring and why (§20:
     # routing is disclosed, never silently skipped)
     review_route: str | None = None
+    # v4.0 §49-51 — Coverage is a second axis beside Confidence; the UI
+    # shows both, never a single "Risk = 76%" number.
+    coverage: str | None = None        # HIGH | MEDIUM | LOW
+    coverage_basis: str | None = None  # why (independent groups, PRIMARY?)
 
 
 class JourneySegmentRisk(BaseModel):

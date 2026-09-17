@@ -34,6 +34,7 @@ router = APIRouter(prefix="/api/v1", tags=["Unified Ops Node v3"])
 class GoalRequest(BaseModel):
     goal: str = Field(min_length=3, max_length=500)
     context: dict | None = None
+    investigation_id: str | None = None  # v4.0 §2: §63 authorization object
 
 
 class CortexRequest(BaseModel):
@@ -117,15 +118,19 @@ async def purge_session(session_id: str, db=Depends(get_db)):
 @router.post("/ops/goal")
 async def run_goal(req: GoalRequest, db=Depends(get_db)):
     """A-02: free-text goal → RGD task tree → UnifiedReport (canonical spine).
-    For the review-gated flow (checklist D) use /ops/plan → /approve."""
-    return await pathfinder.run_goal(req.goal, db, context=req.context)
+    For the review-gated flow (checklist D) use /ops/plan → /approve.
+    v4.0 §2 — pass investigation_id to enforce the §63 authorization."""
+    return await pathfinder.run_goal(req.goal, db, context=req.context,
+                                     investigation_id=req.investigation_id)
 
 
 # ------------------------------------- v3.2 plan review (checklist D) ----
 @router.post("/ops/plan")
 async def propose(req: GoalRequest, db=Depends(get_db)):
-    """Plan Review gate: decompose WITHOUT executing — user approves first."""
-    return pathfinder.propose_plan(req.goal, db, context=req.context)
+    """Plan Review gate: decompose WITHOUT executing — user approves first.
+    v4.0 §2 — pass investigation_id to enforce the §63 authorization."""
+    return pathfinder.propose_plan(req.goal, db, context=req.context,
+                                   investigation_id=req.investigation_id)
 
 
 @router.post("/ops/tree/{tree_id}/approve")

@@ -95,4 +95,9 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "It may already be approved, cancelled or finished",
         "Refresh the Strategy Map to see its current state",
     ),
+    "ACTION_DENIED": (  # v4.0 §76 invariant gate
+        "The requested action is not authorized",
+        "§76: no consequential action without living authorization",
+        "Open or renew an investigation whose scope allows this action",
+    ),
 }

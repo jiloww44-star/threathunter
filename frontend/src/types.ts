@@ -46,6 +46,37 @@ export interface FactCheckResponse {
   copy_chain_clusters?: number | null;
   copy_chain_note?: string | null;
   review_route?: string | null;   // Part 18 D1 lane (always disclosed)
+  /** v4.0 §49-51 — second axis beside Confidence; never a single risk %. */
+  coverage?: "HIGH" | "MEDIUM" | "LOW" | null;
+  coverage_basis?: string | null;
+}
+
+// ------------------------------------------------- v4.0 Investigation Core
+export type InvestigationAuthority = "organization_owned" | "client_authorized"
+  | "public_research" | "unchecked";
+
+export interface InvestigationLink {
+  id: string;
+  kind: string;      // ops_tree | evidence | watch | finding | verification_case
+  ref_id: string;
+  created_at: string;
+}
+
+export interface Investigation {
+  id: string;
+  objective: string;
+  subject_type: string;
+  subject: string;
+  purpose: string;
+  authority: InvestigationAuthority;
+  scope: string;
+  allowed_sources: string[];
+  expires_at: string;
+  status: "OPEN" | "CLOSED";
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  links?: InvestigationLink[];
 }
 
 export interface JourneySegmentRisk {
@@ -236,6 +267,19 @@ export interface StrategyMap extends TreeSummary {
 export interface UnifiedReport {
   answer: string;
   confidence: Confidence;
+  /** v4.0 §70 — Observed / Interpreted / Assessed / Recommended layers,
+   *  never blended into one stream or single number. */
+  epistemic?: {
+    observed: string[];
+    interpreted: string[];
+    assessed: {
+      confidence: Confidence;
+      confidence_axis: string;
+      contradiction_count: number;
+      degraded_branch_count: number;
+    };
+    recommended: string[];
+  };
   key_evidence: Array<{ trust_label: string; agent: string; text: string }>;
   contradictions: Array<{
     trust_label: string; agent: string; description: string; severity: string;
@@ -360,6 +404,9 @@ export interface PlanProposal {
   status: "PROPOSED";
   goal: string;
   peer_id: string;
+  /** v4.0 §2 — set when the plan is bound to an investigation's §63
+   *  authorization object. */
+  investigation_id?: string | null;
   plan: Array<{ agent: string; function: string; title: string; parent: boolean }>;
   task_count: number;
   ethics_flag: { flag: string; message: string } | null;

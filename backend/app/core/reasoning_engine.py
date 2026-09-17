@@ -407,6 +407,13 @@ class ReasoningEngine:
             for s in ordered[:10]
         ]
 
+        # v4.0 §49-51 — Coverage axis (alongside Confidence): how much of the
+        # evidentiary space did we actually reach? HIGH needs ≥3 independent
+        # groups incl. a PRIMARY source; MEDIUM ≥2 groups; else LOW.
+        n_indep = len(groups)
+        has_primary = any(s.get("authority") == "PRIMARY" for s in flat)
+        coverage, coverage_basis = _coverage_assessment(n_indep, has_primary)
+
         answer_map = {
             Verdict.VERIFIED: "Independent evidence confirms this claim.",
             Verdict.MOSTLY_TRUE: "The core of this claim checks out — with one "
@@ -438,6 +445,8 @@ class ReasoningEngine:
             recommended_action=recommend_action(verdict.value, confidence),
             sources_independent=len(groups),
             sources_total=sum(len(g) for g in groups),
+            coverage=coverage,
+            coverage_basis=coverage_basis,
             what_would_change_conclusion=(
                 "A primary official source confirming or denying the event, or "
                 "resolution of the flagged conflict, would materially change "
@@ -462,11 +471,34 @@ class ReasoningEngine:
                 "Absence of evidence — this is NOT proof the claim is false."),
             recommended_action=action,
             sources_independent=0, sources_total=0,
+            # §49-51 — zero reach is the LOW end of the Coverage axis;
+            # disclosed honestly, never absorbed into the verdict (§1.9).
+            coverage="LOW",
+            coverage_basis=("No indexed source group reached — coverage is "
+                            "LOW; this assessment is CONFIDENCE-UNDETERMINED "
+                            "and must not be read as 'claim is false'."),
             what_would_change_conclusion=(
                 "New publications from primary or independent sources entering "
                 "the ingestion pipeline."),
             reasoning_trace=trace,
         )
+
+
+def _coverage_assessment(n_independent: int, has_primary: bool,
+                         ) -> tuple[str, str]:
+    """§49-51 Coverage axis — deterministic mapping (§54), never inferred
+    by the model. Confidence says 'how sure'; Coverage says 'how wide'."""
+    if n_independent >= 3 and has_primary:
+        return ("HIGH", f"{n_independent} independent source groups including "
+                        "a PRIMARY source — wide evidentiary reach.")
+    if n_independent >= 2:
+        return ("MEDIUM", f"{n_independent} independent source groups"
+                          + (", but no PRIMARY source" if not has_primary else
+                             "") + " — moderate evidentiary reach.")
+    return ("LOW", f"{n_independent} independent source group(s)"
+                   + ("" if has_primary else ", no PRIMARY source")
+                   + " — thin evidentiary reach; treat the verdict as "
+                     "provisional.")
 
     # §1.10 — continuous reassessment
     async def reassess_case(self, check_id: str) -> FactCheckResponse | None:

@@ -121,6 +121,32 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 9. v4.0 Intelligence Core addendum
+
+- **§63 investigation authorization gate — blast radius: HIGH, review D1.**
+  This is a hard execution boundary: a mis-scoped allowlist wrongly refuses
+  legitimate work; a bug in the gate wrongly *admits* unacceptable work.
+  Mitigations: denial is the fail-closed default (any read failure of the
+  allowlist falls back to `[]`… and `[]` means *open public tier only*,
+  which is rendered as such — never claimed as blanket authorization); the
+  gate runs BEFORE tree creation so refusals leave zero execution state;
+  every denial/expiry writes a §26 event with the denied families named
+  (§54 deterministic checks — expiry and source sets are code comparisons,
+  never model judgment); "§35/§76" is quoted in the user-facing error so
+  the refusal is traceable to the invariant.
+- **Coverage axis on verdicts — blast radius: MEDIUM, review D2.** A second
+  number could invite the same over-confidence as a single number.
+  Mitigations: Coverage is deterministic from independence analysis
+  (≥3 groups + PRIMARY ⇒ HIGH; ≥2 ⇒ MEDIUM; else LOW) with `coverage_basis`
+  always surfaced beside it; the UnifiedReport's `assessed.confidence_axis`
+  string states "never a single 'risk %'" so the two-axis rule travels with
+  the data.
+- **§70 epistemic block — blast radius: LOW, review D1.** The layers are
+  *derived from the same assembly fields* the spine already renders
+  (observed counts only `EVIDENCE`-labelled items) — it cannot introduce a
+  new claim, only re-separate existing ones; empty layers render empty
+  (offline/degraded runs show honest empties, §20).
+
 ## 8. v3.5 Crisis-focus addendum
 
 - **Crisis-focus UI — blast radius: LOW-MEDIUM, review D2.** Simplifying

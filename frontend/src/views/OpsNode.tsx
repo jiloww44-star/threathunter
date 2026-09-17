@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import type {
-  AgentInfo, CortexReply, Incident, MeshStatus, OpsKpis,
+  AgentInfo, CortexReply, Incident, Investigation, MeshStatus, OpsKpis,
   OpsNotification, PlanProposal, RecentCheck, StrategyMap, TaskStatus,
   UnifiedReport,
 } from "../types";
@@ -31,7 +31,12 @@ interface ChatMsg {
   context?: Record<string, string | null>;
 }
 
-type Pane = "strategy" | "timeline" | "alerts" | "feed" | "kpis" | "stream";
+type Pane = "strategy" | "timeline" | "alerts" | "feed" | "kpis" | "stream"
+  | "cases";
+
+/** v4.0 §2 subject types — mirrors backend core.investigation.SUBJECT_TYPES */
+const SUBJECT_TYPES = ["person", "organization", "domain", "ip", "url",
+                       "location", "claim", "agent"];
 
 function newSessionId(): string {
   return `ui-${Math.random().toString(36).slice(2, 10)}-${Date.now()
@@ -65,6 +70,15 @@ export function OpsNode() {
   // v3.2 safety-by-design state
   const [plan, setPlan] = useState<PlanProposal | null>(null);
   const [incident, setIncident] = useState<Incident | null>(null);
+  // v4.0 §2 Investigation Core — the active case's §63 authorization
+  // binds every plan/goal fired from this session.
+  const [cases, setCases] = useState<Investigation[]>([]);
+  const [activeCase, setActiveCase] = useState<string | null>(null);
+  const [caseForm, setCaseForm] = useState({
+    objective: "", subject_type: "domain", subject: "", purpose: "",
+    authority: "public_research", scope: "", allowed_sources: "",
+    expires_days: 30,
+  });
   // v3.5 risk #10 — interactive checklist progress (local, guidance-only)
   const [checkedSteps, setCheckedSteps] = useState<Record<string, boolean>>({});
 
@@ -121,6 +135,8 @@ export function OpsNode() {
     if (tl) setTreeList(tl);
     if (inc) setIncident(inc.incident);
     if (st) setStream(st);
+    api.listInvestigations().then((c) => setCases(c.investigations))
+      .catch(() => null);
   }, []);
 
   useEffect(() => { refreshPanels(); }, [refreshPanels]);
@@ -165,7 +181,7 @@ export function OpsNode() {
     setBusy(true);
     setError(null);
     try {
-      const p = await api.planGoal(goal);
+      const p = await api.planGoal(goal, activeCase);
       setPlan(p);
       setPane("strategy");
     } catch (e) {
@@ -173,6 +189,51 @@ export function OpsNode() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // v4.0 §2 — case lifecycle helpers
+  const createCase = async () => {
+    setBusy(true); setError(null);
+    try {
+      const inv = await api.createInvestigation({
+        objective: caseForm.objective,
+        subject_type: caseForm.subject_type,
+        subject: caseForm.subject,
+        purpose: caseForm.purpose,
+        authority: caseForm.authority,
+        scope: caseForm.scope,
+        allowed_sources: caseForm.allowed_sources
+          ? caseForm.allowed_sources.split(",").map((s) => s.trim())
+              .filter(Boolean)
+          : undefined,
+        expires_days: caseForm.expires_days,
+        user_id: "demo-user",
+      });
+      setCases((c) => [inv, ...c]);
+      setActiveCase(inv.id);
+      setCaseForm({ objective: "", subject_type: "domain", subject: "",
+                    purpose: "", authority: "public_research", scope: "",
+                    allowed_sources: "", expires_days: 30 });
+    } catch (e) { setError(e as ApiError); } finally { setBusy(false); }
+  };
+
+  const linkCurrentTree = async (invId: string) => {
+    if (!tree) return;
+    setError(null);
+    try {
+      await api.linkInvestigation(invId, "ops_tree", tree.tree_id);
+      const fresh = await api.getInvestigation(invId);
+      setCases((c) => c.map((x) => (x.id === invId ? fresh : x)));
+    } catch (e) { setError(e as ApiError); }
+  };
+
+  const closeCase = async (invId: string) => {
+    setError(null);
+    try {
+      const fresh = await api.closeInvestigation(invId, "closed from Ops Node");
+      setCases((c) => c.map((x) => (x.id === invId ? fresh : x)));
+      if (activeCase === invId) setActiveCase(null);
+    } catch (e) { setError(e as ApiError); }
   };
 
   const approvePlan = async () => {
@@ -514,6 +575,13 @@ export function OpsNode() {
                 </span>
               </h3>
               <p style={{ fontWeight: 600 }}>{plan.goal}</p>
+              {plan.investigation_id && (
+                <p className="muted" style={{ fontSize: 12 }}>
+                  🗂 Bound to investigation case{" "}
+                  <code>{plan.investigation_id}</code> — its §63 authorization
+                  (scope, sources, expiry) governs this run.
+                </p>
+              )}
               {plan.ethics_flag && (
                 <p className="review-route" role="alert">
                   ⛔ Ethics flag: {plan.ethics_flag.message}
@@ -552,12 +620,14 @@ export function OpsNode() {
                 reduced to essentials (stream + alerts); the rest reappear
                 on resolve. No content is deleted, just decluttered. */}
             {((incident ? crisisPanes
-                        : ["strategy", "timeline", "alerts", "feed", "kpis",
-                           "stream"]) as Pane[]).map((p) => (
+                        : ["strategy", "cases", "timeline", "alerts", "feed",
+                           "kpis", "stream"]) as Pane[]).map((p) => (
               <button key={p} type="button"
                       className={pane === p ? "active" : ""}
                       onClick={() => setPane(p)}>
-                {{ strategy: "Strategy Map", timeline: "Timeline",
+                {{ strategy: "Strategy Map",
+                   cases: `Cases${cases.length ? ` (${cases.length})` : ""}`,
+                   timeline: "Timeline",
                    alerts: `Alerts${alerts.length ? ` (${alerts.length})` : ""}`,
                    feed: "Intel Feed", kpis: "KPIs",
                    stream: "Data Stream" }[p]}
@@ -631,6 +701,161 @@ export function OpsNode() {
                 <p className="muted">Run a goal or chat with the cortex — the
                 Strategy Map renders the live task tree here (A-15).</p>
               )}
+            </div>
+          )}
+
+          {pane === "cases" && (
+            <div className="card" aria-label="Investigation cases">
+              <h3 style={{ marginTop: 0 }}>🗂 Investigation Cases</h3>
+              <p className="muted" style={{ fontSize: 13 }}>
+                v4.0 §2/§63 — every case carries an <b>authorization
+                object</b> (purpose, authority, scope, allowed sources,
+                expiry). Goals fired while a case is active are gated by its
+                scope (§35: the model proposes, policy disposes; §76: no
+                action without living authorization).
+              </p>
+
+              {/* ---------- create case ---------- */}
+              <details>
+                <summary style={{ cursor: "pointer", marginBottom: 8 }}>
+                  + New investigation case
+                </summary>
+                <div className="field">
+                  <label htmlFor="case-obj">Objective</label>
+                  <input id="case-obj" value={caseForm.objective}
+                         placeholder="Assess exposure of example.ng"
+                         onChange={(e) => setCaseForm({
+                           ...caseForm, objective: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="case-subject">Subject (type + value)</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select id="case-subject" value={caseForm.subject_type}
+                            onChange={(e) => setCaseForm({
+                              ...caseForm, subject_type: e.target.value })}>
+                      {SUBJECT_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>))}
+                    </select>
+                    <input value={caseForm.subject}
+                           placeholder="example.ng"
+                           aria-label="subject value"
+                           onChange={(e) => setCaseForm({
+                             ...caseForm, subject: e.target.value })} />
+                  </div>
+                </div>
+                <div className="field">
+                  <label htmlFor="case-purpose">Purpose (§63)</label>
+                  <input id="case-purpose" value={caseForm.purpose}
+                         placeholder="Why this investigation exists"
+                         onChange={(e) => setCaseForm({
+                           ...caseForm, purpose: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="case-authority">Authority (§63)</label>
+                  <select id="case-authority" value={caseForm.authority}
+                          onChange={(e) => setCaseForm({
+                            ...caseForm, authority: e.target.value })}>
+                    <option value="organization_owned">organization_owned — our own assets</option>
+                    <option value="client_authorized">client_authorized — written client mandate</option>
+                    <option value="public_research">public_research — open public sources</option>
+                    <option value="unchecked">unchecked — demo/no-auth path</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="case-scope">Scope statement</label>
+                  <input id="case-scope" value={caseForm.scope}
+                         placeholder="passive OSINT only; no active probing"
+                         onChange={(e) => setCaseForm({
+                           ...caseForm, scope: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="case-sources">Allowed source families
+                    (comma-separated; empty = open public tier)</label>
+                  <input id="case-sources" value={caseForm.allowed_sources}
+                         placeholder="osint_databases, rdap, news_feed"
+                         onChange={(e) => setCaseForm({
+                           ...caseForm, allowed_sources: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="case-days">Authorization expires in (days,
+                    1–90)</label>
+                  <input id="case-days" type="number" min={1} max={90}
+                         value={caseForm.expires_days}
+                         onChange={(e) => setCaseForm({
+                           ...caseForm,
+                           expires_days: Number(e.target.value) || 30 })} />
+                </div>
+                <button type="button" className="btn"
+                        disabled={busy || !caseForm.objective.trim()
+                                  || !caseForm.subject.trim()
+                                  || !caseForm.purpose.trim()}
+                        onClick={createCase}>
+                  Open case
+                </button>
+              </details>
+
+              <hr style={{ borderColor: "var(--line)", opacity: .4,
+                           margin: "14px 0" }} />
+
+              {/* ---------- case list ---------- */}
+              {cases.length === 0 && (
+                <p className="muted">No investigation cases yet. Create one
+                above — runs without a case use the no-auth demo path.</p>
+              )}
+              {cases.map((inv) => (
+                <div key={inv.id} className="card"
+                     style={{ marginBottom: 10,
+                              borderColor: inv.id === activeCase
+                                ? "var(--accent)" : undefined }}>
+                  <div style={{ display: "flex", alignItems: "center",
+                                gap: 10, flexWrap: "wrap" }}>
+                    <strong>{inv.objective.slice(0, 60)}</strong>
+                    <span className="verdict-chip"
+                          data-verdict={inv.status === "OPEN"
+                            ? "VERIFIED" : "MISLEADING"}>
+                      {inv.status}
+                    </span>
+                    <button type="button" className="btn ghost"
+                            disabled={inv.status !== "OPEN"}
+                            onClick={() => setActiveCase(
+                              inv.id === activeCase ? null : inv.id)}>
+                      {inv.id === activeCase ? "◇ Active" : "◈ Make active"}
+                    </button>
+                    {tree && inv.status === "OPEN" && (
+                      <button type="button" className="btn ghost"
+                              onClick={() => linkCurrentTree(inv.id)}>
+                        Link current tree
+                      </button>
+                    )}
+                    {inv.status === "OPEN" && (
+                      <button type="button" className="btn ghost"
+                              onClick={() => closeCase(inv.id)}>
+                        Close case
+                      </button>
+                    )}
+                  </div>
+                  <p className="muted" style={{ fontSize: 12, margin: "6px 0" }}>
+                    {inv.subject_type}: <code>{inv.subject}</code> · authority{" "}
+                    <code>{inv.authority}</code> · expires{" "}
+                    {new Date(inv.expires_at).toLocaleDateString()} · sources:{" "}
+                    {inv.allowed_sources.length
+                      ? inv.allowed_sources.join(", ")
+                      : "open public tier"}
+                  </p>
+                  {inv.scope && (
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      scope: {inv.scope}
+                    </p>
+                  )}
+                  {(inv.links ?? []).length > 0 && (
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      links: {(inv.links ?? [])
+                        .map((l) => `${l.kind}:${l.ref_id.slice(0, 8)}`)
+                        .join(" · ")}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

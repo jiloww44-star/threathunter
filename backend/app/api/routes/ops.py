@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from ...api.deps import current_user, get_db
 from ...core import agent_inventory as agent_inventory_mod
-from ...core import approvals, assurance, rbac, trust_layer
+from ...core import approvals, assurance, kpis as kpis_mod, rbac, trust_layer
 from ...core.errors import PipelineError
 from ...swarm import cortex, incident, pathfinder, registry
 from ...swarm.agents import auditor, voyager
@@ -408,10 +408,37 @@ async def kpis(db=Depends(get_db)):
         # v3.2 checklist J — safety learning loop surfaced to dashboards
         "safety_events": db.safety_event_counts(),
         "policy_version": registry.POLICY_VERSION,
+        # v4.5 — §71 five families + §72 north-star; every value carries
+        # OK|UNAVAILABLE + basis (the metrics plane obeys §20 too).
+        "v71": kpis_mod.compute_kpis(db),
         "note": ("Demo-profile latencies are in-process; the shape is the "
                  "production contract (throughput, failure mix, per-agent "
                  "latency, failover count)."),
     }
+
+
+@router.get("/ops/kpis/v71")
+async def kpis_v71(window_hours: int | None = None, db=Depends(get_db),
+                   user=Depends(current_user)):
+    """§71/§72 read-out on its own route for pilot dashboards — RBAC-gated
+    ('read', viewer+) like every telemetry surface."""
+    rbac.require_role(user, "read")
+    return kpis_mod.compute_kpis(db, window_hours=window_hours)
+
+
+@router.get("/ops/metrics")
+async def metrics(window_hours: int | None = None, db=Depends(get_db),
+                  user=Depends(current_user)):
+    """Prometheus exposition of the §71 KPIs (v4.5 pilot ops contract).
+
+    UNAVAILABLE series are omitted BY DESIGN — a fabricated gauge value in
+    a metrics pipeline violates §20 worse than an absent series; scrape
+    th360_kpi_available==0 to alert on un-measurable KPIs."""
+    from fastapi.responses import PlainTextResponse
+    rbac.require_role(user, "read")
+    report = kpis_mod.compute_kpis(db, window_hours=window_hours)
+    return PlainTextResponse(kpis_mod.to_prometheus(report),
+                             media_type="text/plain; version=0.0.4")
 
 
 @router.get("/ops/audit")

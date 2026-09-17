@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import type {
   AgentInfo, CortexReply, DorkSet, GraphData, Incident, Investigation,
-  LockerResponse, MeshStatus, OpsKpis,
+  KpiValue, LockerResponse, MeshStatus, OpsKpis, OpsKpisV71,
   OpsNotification, PlanProposal, RecentCheck, StrategyMap, TaskStatus,
   UnifiedReport,
 } from "../types";
@@ -43,6 +43,83 @@ const SUBJECT_TYPES = ["person", "organization", "domain", "ip", "url",
 function newSessionId(): string {
   return `ui-${Math.random().toString(36).slice(2, 10)}-${Date.now()
     .toString(36)}`;
+}
+
+// ---------- v4.5 §71/§72 pilot KPI read-out ----------
+// Every metric renders its measurement basis (hover/full line). UNAVAILABLE
+// is a first-class state: the platform says "we do not measure this" instead
+// of showing a fabricated zero (§20 applied to telemetry itself).
+const FAMILY_LABELS: Record<string, string> = {
+  intelligence_quality: "🧠 Intelligence quality",
+  journey: "🧭 Journey",
+  fact_checker: "✅ Fact checker",
+  agent_security: "🛡 Agent security",
+  governance: "⚖️ Governance",
+};
+
+function V71Metric({ name, kv }: { name: string; kv: KpiValue }) {
+  const label = name.replace(/_/g, " ");
+  if (kv.status !== "OK" || kv.value === null) {
+    return (
+      <li className="v71-metric" title={kv.basis}>
+        <span className="v71-name">{label}</span>
+        <span className="v71-unavail">UNAVAILABLE</span>
+        <span className="v71-basis">{kv.basis}</span>
+      </li>
+    );
+  }
+  return (
+    <li className="v71-metric" title={kv.basis}>
+      <span className="v71-name">{label}</span>
+      {typeof kv.value === "number" ? (
+        <b className="v71-val">
+          {kv.value}
+          <small className="v71-unit">{kv.unit}</small>
+        </b>
+      ) : (
+        <span className="v71-dict mono">
+          {Object.entries(kv.value)
+            .map(([k, v]) => `${k}=${v}`).join(" · ")}
+        </span>
+      )}
+      <span className="v71-sample">n={kv.sample}</span>
+    </li>
+  );
+}
+
+function V71Panel({ v71 }: { v71: OpsKpisV71 }) {
+  const ns = v71.north_star;
+  return (
+    <div className="v71" aria-label="§71 platform KPIs — v4.5 pilot plane">
+      <div className="v71-north" title={ns.basis}>
+        <span className="v71-north-label">★ NORTH-STAR (§72)</span>
+        <b>{typeof ns.value === "number" ? ns.value : "—"}</b>
+        <span>evidence-backed decisions completed</span>
+        <span className="v71-sample">of {ns.sample} closed cases</span>
+      </div>
+      {Object.entries(v71.families).map(([fam, metrics]) => (
+        <section key={fam} className="v71-family">
+          <h4 style={{ margin: "0 0 .3rem" }}>
+            {FAMILY_LABELS[fam] ?? fam}
+          </h4>
+          <ul className="v71-list">
+            {Object.entries(metrics).map(([m, kv]) => (
+              <V71Metric key={m} name={m} kv={kv} />
+            ))}
+          </ul>
+        </section>
+      ))}
+      <p className="dim" style={{ fontSize: ".75rem" }}>
+        {v71.honesty_note}
+      </p>
+      <p className="dim mono" style={{ fontSize: ".72rem" }}>
+        {v71.kpi_version} · window {v71.window_hours}h · computed{" "}
+        {new Date(v71.computed_at).toLocaleString()} ·{" "}
+        <a href={api.metricsUrl(v71.window_hours)} target="_blank"
+           rel="noreferrer">Prometheus ↗</a>
+      </p>
+    </div>
+  );
 }
 
 export function OpsNode() {
@@ -1586,6 +1663,18 @@ export function OpsNode() {
                   No safety events yet — halts, plan rejections, incidents and
                   masking hits are counted here so we learn where users push
                   back on the AI.
+                </p>
+              )}
+              {/* v4.5 — §71/§72 pilot read-out (honest-degrading metrics) */}
+              <h4 style={{ marginBottom: ".3rem" }}>
+                Platform KPIs (§71) — pilot readiness
+              </h4>
+              {kpis.v71 ? (
+                <V71Panel v71={kpis.v71} />
+              ) : (
+                <p className="muted" style={{ fontSize: ".82rem" }}>
+                  v71 KPI engine unavailable on this backend — the plane
+                  reports absence, never fabricated numbers (§20).
                 </p>
               )}
             </div>

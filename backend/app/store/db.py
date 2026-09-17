@@ -1437,6 +1437,32 @@ class EvidenceStore:
                     (status, connector_id))
             self._conn.commit()
 
+    # ------------------------- v4.5 pilot readiness ------------------------
+    def kpi_sql(self, sql: str, params: tuple = ()) -> list[dict]:
+        """Read-only SELECT accessor for the §71 KPI engine (v4.5).
+
+        Single chokepoint for telemetry queries: anything not starting with
+        SELECT is refused, so a KPI can never write — the telemetry layer
+        observes the store, it does not mutate it (§20/§76 discipline
+        applied to the metrics plane itself)."""
+        if not sql.lstrip().upper().startswith("SELECT"):
+            raise ValueError("kpi_sql is read-only (SELECT only)")
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def evidence_id_by_hash(self, source_id: str,
+                            content_hash: str) -> str | None:
+        """Idempotency lookup for live-source ingestion (§68: one content,
+        one row — re-observing the same bytes never duplicates evidence)."""
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT id FROM evidence
+                   WHERE source_id=? AND content_hash=?
+                   ORDER BY fetched_at DESC LIMIT 1""",
+                (source_id, content_hash)).fetchone()
+        return row["id"] if row else None
+
     # ------------------------- v4.4 retention sweeper ----------------------
     def delete_notifications_older_than(self, cutoff_iso: str) -> int:
         with self._lock:

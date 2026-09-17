@@ -13,6 +13,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://th360:th360@db:5432/th360
       REDIS_URL: redis://redis:6379/0
       TH360_SOURCES_FILE: /srv/seed/sources_demo.yaml
+      # v4.4/v4.5 pilot plane (values come from .env /Vault, never inline):
+      TH360_SIEM_KEY: ${TH360_SIEM_KEY:-}            # optional export HMAC
+      TH360_KPI_WINDOW_HOURS: ${TH360_KPI_WINDOW_HOURS:-168}
     ports:
       - "8000:8000"
     depends_on: [db, redis]

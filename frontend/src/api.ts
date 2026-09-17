@@ -274,6 +274,10 @@ export const api = {
     }),
   siemExportUrl: (sinceHours = 24, limit = 500) =>
     `/api/v1/ops/siem/export?since_hours=${sinceHours}&limit=${limit}`,
+  // v4.5 pilot ops — Prometheus exposition of the §71 KPIs. UNAVAILABLE
+  // series are omitted by design; alert on th360_kpi_available==0.
+  metricsUrl: (windowHours = 168) =>
+    `/api/v1/ops/metrics?window_hours=${windowHours}`,
 };
 
 export interface ApiError {

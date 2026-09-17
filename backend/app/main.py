@@ -69,8 +69,11 @@ async def pipeline_error_handler(request, exc: PipelineError):
     )
     return JSONResponse(
         status_code=exc.status,
+        # v4.5: `detail` carries the raising site's specific, operator-facing
+        # explanation (§20 transparency) — additive to the legacy keys.
         content={"error_code": exc.code, "title": title, "meaning": meaning,
-                 "next_step": next_step},
+                 "next_step": next_step,
+                 "detail": str(exc.detail)[:600]},
     )
 
 
@@ -89,9 +92,12 @@ async def readyz():
 async def root():
     return {
         "product": "ThreatHunter360",
-        "version": "4.0.0 INTELLIGENCE CORE",
+        "version": "4.5.0 PILOT READINESS",
+        "planes": ["4.0 Intelligence Core", "4.1 Forensics & Evidence",
+                   "4.2 Governance Planes", "4.3 Continuous Assurance",
+                   "4.4 Enterprise Plane", "4.5 Pilot Readiness"],
         "modules": ["factcheck", "journey", "kyc", "ops-node", "cortex",
-                    "investigations", "osint"],
+                    "investigations", "osint", "kpis", "live-sources"],
         "agents": ["VOYAGER", "SENTINEL", "SENTINEL_FORENSICS", "HUNTER",
                    "AUDITOR"],
         "docs": "/docs",

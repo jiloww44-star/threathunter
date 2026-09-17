@@ -513,6 +513,28 @@ export interface OpsNotification {
   created_at: string;
 }
 
+// ---------------- v4.5 §71/§72 pilot KPI plane ----------------
+/** One KPI value with its own provenance (§20 applied to telemetry):
+ *  status OK = measured from persisted rows (basis says which);
+ *  UNAVAILABLE = the write-path is missing (basis names the gap). */
+export interface KpiValue {
+  value: number | Record<string, number> | null;
+  unit: string;
+  status: "OK" | "UNAVAILABLE";
+  sample: number;
+  basis: string;
+}
+
+export interface OpsKpisV71 {
+  kpi_version: string;
+  spec: string;
+  computed_at: string;
+  window_hours: number;
+  north_star: KpiValue & { id: string; spec: string };  // §72
+  families: Record<string, Record<string, KpiValue>>;   // §71 five families
+  honesty_note: string;
+}
+
 export interface OpsKpis {
   tasks_total: number;
   task_status_mix: Record<string, number>;
@@ -523,6 +545,7 @@ export interface OpsKpis {
   notifications_total: number;
   safety_events?: Record<string, number>;   // v3.2 checklist J
   policy_version: string;
+  v71?: OpsKpisV71;                         // v4.5 pilot read-out
 }
 
 export interface MeshStatus {

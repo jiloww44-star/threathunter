@@ -121,6 +121,13 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 14. v4.5 Pilot Readiness addendum
+
+- **§21/§71 KPI statements — blast radius: MEDIUM-HIGH, review D2.** A KPI is a claim about the platform; a wrong "green" is the second-worst output after a false posture OK (v4.3 addendum). Mitigations: every KPI carries `{status, sample, basis}` — unmeasurable spec metrics report UNAVAILABLE with the missing write-path named (telemetry obeys §20); measured zeros require a real denominator (sample > 0) else UNAVAILABLE; the Prometheus exporter omits UNAVAILABLE value series so ops pipelines can't ingest fabricated numbers (`th360_kpi_available` exists precisely to alert on measurement loss); `kpi_sql` is SELECT-only at the chokepoint so telemetry can never write.
+- **First live source (crt.sh) — blast radius: MEDIUM, review D2.** Real network egress against real subjects is new; the failure mode is silent wrongness, not access. Mitigations: PASSIVE CT only (§64 lowest-sensitivity class), gated §76 → §63 cone → §80 ACTIVE+allowlist before any packet; every outcome — success AND classified failure — writes §26 events; evidence rows are content-hash idempotent (re-observation never duplicates); connector health flips DEGRADED with cause+timestamp on failure rather than resting on the activation mount, so a broken egress is *visible* in the §6/§32 monitor (caught and fixed during live verification).
+- **Error-detail surfacing in PipelineError handler — blast radius: LOW, review D1.** Responses now include the raising site's operator-facing `detail` (additive to legacy keys). Mitigation: truncated to 600 chars; details are authored for operators, no stack traces or secrets (§25 — connector secrets never enter the platform by construction).
+- **`/ops/metrics` scrape surface — blast radius: LOW-MEDIUM, review D2.** Operational counters visible at `read` tier; no case content, subjects, or evidence in the exposition (counts and rates only).
+
 ## 13. v4.4 Enterprise Plane addendum
 
 - **RBAC enforcement — blast radius: HIGH, review D1.** A permissive default would make roles cosmetic; an accidental hard requirement would brick the demo. Mitigations: matrix is deterministic and tested from both directions (403 floor tests + floor-pass tests); the demo human path is admin-with-disclosure openly declared in whoami; API keys can never self-elevate (role comes from key bearing, header overrides ignored on keyed paths); SSO remains documented-only — no fake IdP forms anywhere.

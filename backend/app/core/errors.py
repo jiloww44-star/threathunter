@@ -105,4 +105,36 @@ ERROR_MAP: dict[str, tuple[str, str, str]] = {
         "Decisions are single-use — the trail keeps both attempts",
         "Refresh the approvals list to see the recorded decision",
     ),
+    # ---- v4.5 pilot readiness (live sources + KPI plane) ----
+    "INV_NOT_FOUND": (
+        "That investigation does not exist",
+        "Nothing was queried and nothing is claimed (§1.9)",
+        "Check the case id in the Ops Node Cases tab",
+    ),
+    "CONNECTOR_NOT_ACTIVE": (
+        "The required data connector is not ACTIVE",
+        "Live sources enter only through the §80 connector registry after "
+        "governance approval — no approval, no live fetch (§76)",
+        "Register the connector (admin), approve it (governance), retry",
+    ),
+    "SOURCE_TIMEOUT": (
+        "The external source did not answer in time",
+        "No observation was made and none is claimed — UNVERIFIED ≠ FALSE",
+        "Retry shortly; staleness is tracked in the Source Health Monitor",
+    ),
+    "SOURCE_UNREACHABLE": (
+        "The external source could not be reached",
+        "No observation was made and none is claimed",
+        "Check egress/network policy; retry shortly",
+    ),
+    "SOURCE_THROTTLED": (
+        "The external source rate-limited the query",
+        "Fair-use ceiling hit; no observation was made",
+        "Back off and retry after a pause",
+    ),
+    "SOURCE_BAD_RESPONSE": (
+        "The external source answered with an unusable response",
+        "Parser/source drift — treated as UNVERIFIED, never guessed (§20)",
+        "Capture the response and review the parser before trusting it",
+    ),
 }

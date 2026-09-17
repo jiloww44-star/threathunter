@@ -2,6 +2,8 @@
 
 POST /api/v1/osint/dorks            methodology dork builder (generation only)
 POST /api/v1/osint/forensics/media  SENTINEL A-04 media forensics
+POST /api/v1/osint/live/crtsh       v4.5 first REAL source — PASSIVE CT
+                                    observation through the §80 registry
 GET  /api/v1/evidence/locker        search the evidence store with provenance
 
 Honest-degradation contract (§20): the dork builder NEVER executes syntax
@@ -14,8 +16,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from ...api.deps import get_db
-from ...core import dork_builder, investigation
+from ...api.deps import current_user, get_db
+from ...core import dork_builder, investigation, live_sources, rbac
 from ...swarm.agents import sentinel
 from ...swarm import registry
 
@@ -111,3 +113,24 @@ async def evidence_locker(q: str | None = None, source: str | None = None,
             "note": ("Provenance-first locker: every row carries source, "
                      "authority and fetch time (§17). Absence here = "
                      "nothing stored, never a verdict (§1.9).")}
+
+
+class CrtshObservationRequest(BaseModel):
+    investigation_id: str = Field(min_length=4, max_length=80)
+    domain: str = Field(min_length=4, max_length=253)
+
+
+@router.post("/osint/live/crtsh")
+async def crtsh_observation(req: CrtshObservationRequest, db=Depends(get_db),
+                            user=Depends(current_user)):
+    """v4.5 pilot — the first REAL source: PASSIVE Certificate Transparency
+    via crt.sh, executed through the §80 connector registry.
+
+    Gate order (each failure classified, §20): §76 living-case → §63 scope
+    binding (domain must be the case subject or in its cone) → ACTIVE
+    on-allowlist connector → fetch → provenance-stamped evidence row,
+    linked into the case, with SourceQueried/ObservationReceived events."""
+    rbac.require_role(user, "investigate.run")
+    return live_sources.run_crtsh_observation(
+        db, investigation_id=req.investigation_id, domain=req.domain,
+        actor=user.get("id", "demo"))

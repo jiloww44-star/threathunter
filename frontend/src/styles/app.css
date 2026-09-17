@@ -962,3 +962,44 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
   color: var(--color-text-faint);
   text-decoration: line-through;
 }
+
+/* ------------- v4.5 §71/§72 pilot KPI plane ------------- */
+.v71 { margin-top: .25rem; }
+.v71-north {
+  display: flex; align-items: baseline; gap: .55rem;
+  padding: .55rem .7rem; margin-bottom: .7rem;
+  border: 1px solid var(--color-accent, #cfff00);
+  border-radius: 8px; background: rgba(207, 255, 0, .06);
+}
+.v71-north b { font-size: 1.6rem; color: var(--color-accent, #cfff00); }
+.v71-north-label {
+  font-size: .68rem; letter-spacing: .08em;
+  color: var(--color-text-dim);
+}
+.v71-family {
+  border-top: 1px solid var(--color-border, #2a2a2a);
+  padding-top: .45rem; margin-bottom: .5rem;
+}
+.v71-list { list-style: none; margin: 0; padding: 0; }
+.v71-metric {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .45rem;
+  padding: .28rem 0; font-size: .8rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, .05);
+}
+.v71-name { color: var(--color-text-dim); min-width: 11rem; }
+.v71-val { color: var(--color-text); font-size: .95rem; }
+.v71-unit {
+  font-size: .68rem; color: var(--color-text-dim); margin-left: .3rem;
+  font-weight: 400;
+}
+.v71-dict { font-size: .74rem; color: var(--color-text); }
+.v71-sample { font-size: .68rem; color: var(--color-text-dim); margin-left: auto; }
+.v71-unavail {
+  font-size: .66rem; letter-spacing: .06em; padding: .1rem .45rem;
+  border: 1px dashed var(--color-warn, #ffb020); border-radius: 99px;
+  color: var(--color-warn, #ffb020);
+}
+.v71-basis {
+  flex-basis: 100%; font-size: .72rem; color: var(--color-text-dim);
+  font-style: italic;
+}

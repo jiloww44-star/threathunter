@@ -5,12 +5,15 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { reasonWithSERV } from "./serv.js";
 import { evaluatePolicy } from "./policy.js";
+import { McpAssuranceGateway } from "./mcp-gateway.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "public");
 const port = Number(process.env.PORT || 3000);
 const auditEvents = [];
+const mcpGateway = new McpAssuranceGateway();
 
 function canonicalEvent(event) {
   const { event_hash, ...unsigned } = event;
@@ -111,8 +114,38 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         product: "LOG_ON Assurance Gate",
         serv_configured: Boolean(process.env.SERV_API_KEY),
-        model: process.env.SERV_MODEL || "SERV-Standard"
+        model: process.env.SERV_MODEL || "SERV-Standard",
+        mcp_gateway: true
       });
+    }
+    if (req.method === "GET" && req.url === "/api/mcp/tools") {
+      const tools = await mcpGateway.connect().then(() => mcpGateway.listTools());
+      return sendJson(res, 200, { count: tools.length, tools });
+    }
+    if (req.method === "POST" && req.url === "/api/mcp/call") {
+      const body = await readJson(req);
+      const agent_id = String(body.agent_id || "demo-agent").trim();
+      const tool_name = String(body.tool_name || "").trim();
+      if (!tool_name) return sendJson(res, 400, { error: "tool_name is required" });
+
+      const result = await mcpGateway.governAndCall({
+        agent_id,
+        tool_name,
+        arguments: body.arguments && typeof body.arguments === "object" ? body.arguments : {}
+      });
+
+      const audit = recordAudit({
+        product: "LOG_ON Assurance Gate",
+        agent_id,
+        action: result.control?.action || "UNKNOWN",
+        tool: tool_name,
+        resource: result.control?.resource || "UNKNOWN",
+        decision: result.policy.decision,
+        executed: result.executed,
+        source: "MCP -> LOG_ON AAGATE -> deterministic policy engine"
+      });
+
+      return sendJson(res, 200, { ...result, audit, audit_verification: verifyAuditChain() });
     }
     if (req.method === "GET" && req.url === "/api/audit") {
       return sendJson(res, 200, {
@@ -159,3 +192,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, () => console.log("LOG_ON Assurance Gate running on http://localhost:" + port));
+process.on("SIGINT", async () => { await mcpGateway.close(); process.exit(0); });
+process.on("SIGTERM", async () => { await mcpGateway.close(); process.exit(0); });

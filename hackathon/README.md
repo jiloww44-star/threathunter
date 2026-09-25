@@ -18,6 +18,7 @@ agent request
 → LOG_ON deterministic policy
 → PASS / ESCALATE / BLOCK
 → audit evidence
+→ audit-chain verification
 
 OpenServ's current Hackathon Edition 01 requires a new, working, demoable agent/workflow/product that leverages SERV Reasoning. The Open Track accepts any SERV Reasoning build, and judging emphasizes creativity, user-readiness and revenue potential.
 
@@ -42,6 +43,18 @@ Run tests:
 ```bash
 npm test
 ```
+
+## Assurance controls shown by the MVP
+
+- Identity
+- Permissions
+- Tools
+- Data access
+- Runtime/environment
+- Approval boundary
+- Audit evidence
+
+The MVP also exposes `GET /api/audit/verify` so the demo can prove that the in-memory evidence chain has not been altered since it was recorded.
 
 ## Product boundary
 

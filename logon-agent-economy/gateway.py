@@ -33,6 +33,7 @@ class Tool:
     tool_id: str
     actions: frozenset[str]
     resources: frozenset[str]
+    data_classes: frozenset[str] = frozenset({"PUBLIC", "INTERNAL"})
 
 
 @dataclass(frozen=True)
@@ -72,12 +73,15 @@ class AuditLog:
 
 @dataclass
 class Gateway:
-    policy_id: str = "LOGON-AE-BASE-001"
+    policy_id: str = "LOGON-GOV-BASE-001"
     agents: dict[str, Agent] = field(default_factory=dict)
     tools: dict[str, Tool] = field(default_factory=dict)
     approvals: dict[str, Approval] = field(default_factory=dict)
     calls: dict[str, int] = field(default_factory=dict)
     audit: AuditLog = field(default_factory=AuditLog)
+
+    # Governance boundary: agents can propose requests, but cannot decide policy.
+    GOVERNANCE_ROLE = "AGENT_GOVERNANCE_AND_ASSURANCE"
 
     def register_agent(self, agent: Agent) -> None:
         if agent.agent_id in self.agents:
@@ -104,19 +108,22 @@ class Gateway:
         reason: str,
         approval_id: Optional[str],
     ) -> None:
-        self.audit.append({
-            "event_id": f"evt-{len(self.audit.events)+1:05d}",
-            "timestamp": time.time(),
-            "trace_id": trace_id,
-            "agent_id": agent_id,
-            "tool_id": tool_id,
-            "action": action,
-            "resource": resource,
-            "decision": decision.value,
-            "reason": reason,
-            "policy_id": self.policy_id,
-            "approval_id": approval_id,
-        })
+        self.audit.append(
+            {
+                "event_id": f"evt-{len(self.audit.events)+1:05d}",
+                "timestamp": time.time(),
+                "trace_id": trace_id,
+                "agent_id": agent_id,
+                "tool_id": tool_id,
+                "action": action,
+                "resource": resource,
+                "decision": decision.value,
+                "reason": reason,
+                "policy_id": self.policy_id,
+                "governance_role": self.GOVERNANCE_ROLE,
+                "approval_id": approval_id,
+            }
+        )
 
     def evaluate(
         self,
@@ -126,11 +133,21 @@ class Gateway:
         action: str,
         resource: str,
         environment: str = "development",
+        data_class: str = "INTERNAL",
         approval_id: Optional[str] = None,
         trace_id: str = "trace-demo",
     ) -> Decision:
         def reject(decision: Decision, reason: str) -> Decision:
-            self._event(trace_id, agent_id, tool_id, action, resource, decision, reason, approval_id)
+            self._event(
+                trace_id,
+                agent_id,
+                tool_id,
+                action,
+                resource,
+                decision,
+                reason,
+                approval_id,
+            )
             return decision
 
         agent = self.agents.get(agent_id)
@@ -152,6 +169,9 @@ class Gateway:
 
         if resource not in tool.resources:
             return reject(Decision.BLOCK, "resource not authorized for tool")
+
+        if data_class not in tool.data_classes:
+            return reject(Decision.BLOCK, "data class not authorized for tool")
 
         needs_approval = action in {"DELETE", "TRANSFER", "PUBLISH"} or (
             environment == "production" and action == "UPDATE"
@@ -178,7 +198,13 @@ class Gateway:
 
         self.calls[agent_id] += 1
         self._event(
-            trace_id, agent_id, tool_id, action, resource,
-            Decision.PASS, "policy satisfied", approval_id
+            trace_id,
+            agent_id,
+            tool_id,
+            action,
+            resource,
+            Decision.PASS,
+            "policy satisfied",
+            approval_id,
         )
         return Decision.PASS

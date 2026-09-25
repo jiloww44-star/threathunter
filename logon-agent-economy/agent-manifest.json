@@ -1,0 +1,36 @@
+{
+  "agent_id": "logon-bi-agent",
+  "name": "LOG_ON Global AI Business Intelligence Agent",
+  "version": "0.2.0",
+  "owner": "workspace-owner",
+  "lifecycle": "ACTIVE",
+  "risk_tier": "MEDIUM",
+  "governance_role": "AGENT_GOVERNED_WORKFLOW_OPERATOR",
+  "assurance_profile": "LOGON-BASELINE-001",
+  "purpose": [
+    "business_intelligence",
+    "opportunity_intelligence",
+    "decision_support",
+    "governed_workflow_automation"
+  ],
+  "authority_model": {
+    "can_propose": true,
+    "can_request_tools": true,
+    "can_decide_policy": false,
+    "can_modify_own_permissions": false,
+    "can_approve_own_action": false,
+    "can_disable_audit": false,
+    "can_bypass_aagate": false
+  },
+  "allowed_actions": ["READ", "CREATE", "UPDATE", "DELETE"],
+  "data_classes": ["PUBLIC", "INTERNAL"],
+  "approval_required": ["DELETE", "TRANSFER", "PUBLISH"],
+  "agent_economy": {
+    "serv": true,
+    "mcp": true,
+    "a2a": true,
+    "erc8004_adapter": true,
+    "x402_adapter": true,
+    "ap2_adapter": true
+  }
+}

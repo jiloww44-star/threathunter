@@ -1,0 +1,25 @@
+name: LOG_ON Hackathon MVP Tests
+
+on:
+  push:
+    paths:
+      - "hackathon/**"
+      - ".github/workflows/logon-hackathon-tests.yml"
+  pull_request:
+    paths:
+      - "hackathon/**"
+      - ".github/workflows/logon-hackathon-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hackathon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm test

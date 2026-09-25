@@ -1,0 +1,40 @@
+{
+  "policy_id": "LOGON-GOV-BASE-001",
+  "version": "0.2.0",
+  "authority": "LOG_ON_POLICY_ENGINE",
+  "default_decision": "BLOCK",
+  "governance": {
+    "role": "AGENT_GOVERNANCE_AND_ASSURANCE",
+    "principle": "compromised_model_must_not_imply_compromised_authority",
+    "authoritative_layer": "policy_engine",
+    "enforcement_point": "AAGATE",
+    "assurance_plane": "LOG_ON_EVIDENCE"
+  },
+  "control_chain": [
+    "agent_identity",
+    "permissions",
+    "tools",
+    "data_access",
+    "runtime_monitoring",
+    "approval_boundaries",
+    "audit_trail"
+  ],
+  "actions": {
+    "READ": "PASS",
+    "CREATE": "PASS",
+    "UPDATE": "PASS",
+    "DELETE": "ESCALATE",
+    "TRANSFER": "ESCALATE",
+    "PUBLISH": "ESCALATE",
+    "GRANT": "BLOCK",
+    "ADMIN": "BLOCK"
+  },
+  "agent_economy_adapters": {
+    "reasoning": "SERV",
+    "tools": "MCP",
+    "interoperability": "A2A",
+    "identity_trust": "ERC-8004",
+    "machine_payments": "x402",
+    "user_authorized_payments": "AP2"
+  }
+}

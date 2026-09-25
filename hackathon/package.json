@@ -1,0 +1,14 @@
+{
+  "name": "logon-assurance-gate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LOG_ON Governance + Agent Assurance hackathon MVP running its reasoning layer through SERV.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/policy.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module"
+}

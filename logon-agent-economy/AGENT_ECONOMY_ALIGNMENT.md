@@ -1,82 +1,93 @@
-# LOG_ON Agent Economy Alignment
+# LOG_ON Agent Economy Alignment — Governed by the Assurance Plane
 
-## Position
+The Agent Economy is a **deployment domain** for LOG_ON, not LOG_ON's primary identity.
 
-LOG_ON is not a generic crypto agent. The target is:
+The primary LOG_ON role is:
 
-**Agent Assurance + Business Intelligence infrastructure for governed agent-to-agent and agent-to-service commerce.**
+> **Govern AI agents, their authority, their workflow participation and their evidence.**
 
-External protocols are adapters around the LOG_ON authority boundary.
-
-## Protocol map
-
-| Layer | Protocol / platform | LOG_ON responsibility |
-|---|---|---|
-| Reasoning | SERV | reason and propose |
-| Tool access | MCP | governed capability access |
-| Agent interoperability | A2A | task/delegation transport |
-| Agent identity/trust | ERC-8004 | discovery, identity, reputation, validation inputs |
-| Machine payments | x402 | payment request/settlement adapter |
-| User-authorized payments | AP2 | intent/mandate-bound payment adapter |
-
-## Non-negotiable chain
+## Governance chain
 
 ```
-external identity / protocol
+external protocol / agent
         ↓
-LOG_ON trust normalization
+identity normalization
         ↓
-policy engine
+LOG_ON risk + policy
         ↓
 AAGATE
         ↓
-adapter / tool / payment execution
+tool / agent / payment adapter
         ↓
-evidence
+execution
+        ↓
+evidence + monitoring
 ```
 
-An ERC-8004 reputation signal, A2A delegation message, MCP tool declaration, wallet capability, x402 payment request, or AP2 mandate does **not** independently authorize an action.
+## Protocol mapping
 
-## Agent-to-agent delegation
+| Layer | Protocol / platform | What LOG_ON governs |
+|---|---|---|
+| Reasoning | SERV | reasoning/proposals |
+| Tools | MCP | capability scope + invocation |
+| Agent collaboration | A2A | delegated task authority |
+| Agent trust | ERC-8004 | identity/reputation/validation inputs |
+| Machine payment | x402 | payment intent, amount, target, limits |
+| User-authorized payment | AP2 | mandate scope and constraints |
+| Wallet | AgentKit / wallet infrastructure | spending authority and recipient policy |
 
-Every delegation should become a bounded capability:
+## Important distinction
+
+An A2A message is not human authorization.
+
+An ERC-8004 reputation signal is not authorization.
+
+An MCP server declaration is not authorization.
+
+An x402 payment request is not authorization.
+
+An AP2 mandate is not a substitute for LOG_ON policy evaluation.
+
+A wallet is not allowed to decide its own business policy.
+
+LOG_ON remains the governance and assurance authority.
+
+## Delegation model
+
+Every child-agent capability should carry:
 
 ```
 parent_agent
-  ↓
-child_agent
-  ↓
-task
-  ↓
-allowed tools
-  ↓
-allowed resources
-  ↓
-budget
-  ↓
-expiry
-  ↓
-trace
+→ child_agent
+→ task
+→ allowed tools
+→ allowed data/resources
+→ budget
+→ expiry
+→ purpose
+→ trace
 ```
 
-## Economic actions
+Permissions do not propagate implicitly.
 
-Economic actions remain high-impact capabilities:
+## Economic-action model
 
 ```
 identity
-→ purpose
-→ merchant/resource
+→ business purpose
+→ target / merchant
 → amount
+→ data involved
+→ risk
 → spending policy
 → approval threshold
 → payment protocol
-→ execute
+→ execution
 → settlement evidence
 ```
 
-Raw private keys must never be exposed to the model.
+Raw wallet private keys must never become model context.
 
-## Future end-to-end demo
+## End-state
 
-LOG_ON discovers a specialist agent, verifies trust inputs, delegates a bounded task, governs its MCP/tool access, evaluates an economic action, routes it through the appropriate payment adapter, and records the full evidence chain.
+LOG_ON should become the assurance/control plane through which enterprise agents and external agents can safely participate in workflows and, where authorized, economic activity.

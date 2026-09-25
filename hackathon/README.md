@@ -80,7 +80,7 @@ The model proposes a structured action. LOG_ON's deterministic control layer dec
 
 ## MCP execution boundary
 
-The hackathon MVP now includes a real MCP client gateway using the official TypeScript MCP client SDK. The gateway connects to a local stdio MCP server, discovers tools, maps each tool to explicit LOG_ON control metadata, evaluates the deterministic policy, and only calls the MCP tool when the policy returns PASS. MCP tool annotations are treated as behavioral hints, not authorization; LOG_ON remains authoritative. citeturn634543search2turn248548search1
+The hackathon MVP now includes a real MCP client gateway using the official TypeScript MCP client SDK. The gateway connects to a local stdio MCP server, discovers tools, maps each tool to explicit LOG_ON control metadata, evaluates the deterministic policy, and only calls the MCP tool when the policy returns PASS. MCP tool annotations are treated as behavioral hints, not authorization; LOG_ON remains authoritative.
 
 For the demo, the local MCP server exposes four simulated tools:
 
@@ -95,4 +95,11 @@ Endpoints:
 
 `POST /api/mcp/call` — mediated MCP execution. A blocked or escalated tool is not called.
 
-The MCP SDK currently uses the split `@modelcontextprotocol/client` and `@modelcontextprotocol/server` packages in the v2 line; the branch pins the current 2.1.x-compatible range. citeturn802579search0turn802579search4
+The MCP SDK currently uses the split `@modelcontextprotocol/client` and `@modelcontextprotocol/server` packages in the v2 line; the branch pins the current 2.1.x-compatible range.
+
+
+## MCP implementation status
+
+The branch uses the official split MCP v2 packages, `@modelcontextprotocol/client` and `@modelcontextprotocol/server`. The current SDK line implements the 2026-07-28 MCP specification and supports client connections over stdio and Streamable HTTP.
+
+The demo uses stdio for a local MCP server. The same gateway boundary can be adapted to Streamable HTTP by replacing the transport with `StreamableHTTPClientTransport`.

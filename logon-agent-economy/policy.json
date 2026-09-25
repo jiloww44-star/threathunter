@@ -1,0 +1,23 @@
+{
+  "policy_id": "LOGON-AE-BASE-001",
+  "version": "0.1.0",
+  "default_decision": "BLOCK",
+  "actions": {
+    "READ": "PASS",
+    "CREATE": "PASS",
+    "UPDATE": "PASS",
+    "DELETE": "ESCALATE",
+    "TRANSFER": "ESCALATE",
+    "PUBLISH": "ESCALATE",
+    "GRANT": "BLOCK",
+    "ADMIN": "BLOCK"
+  },
+  "agent_economy": {
+    "reasoning": "SERV",
+    "tools": "MCP",
+    "interoperability": "A2A",
+    "identity": "ERC-8004",
+    "machine_payments": "x402",
+    "user_authorized_payments": "AP2"
+  }
+}

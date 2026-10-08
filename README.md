@@ -110,6 +110,10 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
 mobile/            Expo app — mapcn-rn full-capability spatial demo
                    (MapLibre + CARTO keyless, Uniwind chrome; see mobile/README.md)
+design/            versioned tranche mapping docs + research:
+                   ContextualSystems-v1.md — Human–Context–System–Behavior
+                   alignment engine run against the platform (evidence-tagged:
+                   machine half = FACTs, human half = UNKNOWNs; verdict: PILOT)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)
                     + v3.0 asset_inventory/cve_feed fixtures

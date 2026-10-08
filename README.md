@@ -108,6 +108,8 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
                     measurement-closure v4.6 / live-sources-ii v4.7 /
                     chronology-repro v4.8)
 frontend/          React + Vite dashboard (progressive disclosure, accessible)
+mobile/            Expo app — mapcn-rn full-capability spatial demo
+                   (MapLibre + CARTO keyless, Uniwind chrome; see mobile/README.md)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)
                     + v3.0 asset_inventory/cve_feed fixtures

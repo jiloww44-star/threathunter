@@ -361,3 +361,35 @@ class TestLiveSourceKpis:
         ha = hashlib.sha256(json.dumps(pa, sort_keys=True).encode()).hexdigest()
         hb = hashlib.sha256(json.dumps(pb, sort_keys=True).encode()).hexdigest()
         assert ha == hb
+
+
+class TestWireDisciplineConfig:
+    """TH360_HTTP_CA_BUNDLE (diagnosis-confirmed need): egress-intercepting
+    environments re-sign allowed SNIs with a non-public CA; verification
+    must be pointable at a bundle that includes it WITHOUT changing default
+    behavior (env unset ⇒ certifi, i.e. verify=True)."""
+
+    def test_ca_bundle_env_overrides_certifi(self, monkeypatch):
+        seen = {}
+
+        def fake_get(url, **kw):
+            seen.update(kw)
+            return httpx.Response(200, json={})
+
+        monkeypatch.setattr(live_sources.httpx, "get", fake_get)
+        monkeypatch.setenv("TH360_HTTP_CA_BUNDLE", "/tmp/tenant-proxy-ca.crt")
+        live_sources._http_get("https://crt.sh/")
+        assert seen["verify"] == "/tmp/tenant-proxy-ca.crt"
+
+    def test_default_verify_unchanged_when_env_unset(self, monkeypatch):
+        seen = {}
+
+        def fake_get(url, **kw):
+            seen.update(kw)
+            return httpx.Response(200, json={})
+
+        monkeypatch.delenv("TH360_HTTP_CA_BUNDLE", raising=False)
+        monkeypatch.setattr(live_sources.httpx, "get", fake_get)
+        live_sources._http_get("https://crt.sh/")
+        assert seen["verify"] is True
+        assert seen["follow_redirects"] is True

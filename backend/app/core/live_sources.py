@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone
 
@@ -78,9 +79,19 @@ def _degraded(code: str, status: int, happened: str, means: str,
 
 
 # ---------------------------------------------------------------- the wire --
+def _ca_bundle():
+    """TH360_HTTP_CA_BUNDLE — CA bundle path for egress-intercepting
+    environments. Enterprise/sandbox MITM proxies re-sign ALLOWED SNIs with
+    their own CA (here measured live: leaf issuer "E2B Proxy CA"); Python's
+    bundled certifi cannot verify those. Unset = certifi default, behavior
+    unchanged. A bad path fails loudly and is honestly classified (§20)."""
+    path = os.environ.get("TH360_HTTP_CA_BUNDLE")
+    return path if path else True
+
+
 def _http_get(url: str) -> httpx.Response:
     return httpx.get(url, timeout=_TIMEOUT, headers=_UA,
-                     follow_redirects=True)
+                     follow_redirects=True, verify=_ca_bundle())
 
 
 def _get(url: str, source_label: str, http_get) -> httpx.Response:

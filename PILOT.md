@@ -12,7 +12,7 @@ so instead of implying it.
 |---|---|
 | Investigation core + §63/§76 gates | SSO is documentation-only in the demo profile (no IdP) — RBAC is real, identity federation is not claimed |
 | Five §71 KPI families + §72 north-star | KPIs whose write-paths don't exist report UNAVAILABLE with the gap named (see §5 below) |
-| First REAL live source (crt.sh) via the §80 connector registry | All other live sources onboard the same way; none are pre-wired |
+| First REAL live source (crt.sh) via the §80 connector registry | All other live sources onboard the same way; none are pre-wired. Egress reality (root-caused, `design/EgressDiagnosis-v1.md`): sources must be reachable from YOUR network — TLS-filtering egress kills the fetch honestly (`SOURCE_UNREACHABLE`), and if your egress inspects TLS with its own CA, set `TH360_HTTP_CA_BUNDLE` (see `.env.example`) |
 | Audit trail, hash-chain, SIEM NDJSON export (optional HMAC) | Scheduled cadence (beat) runs only when the celery worker/beat services are up |
 | Approval engine + override instrumentation | Two-person production rule is a documented policy pattern (§37), not enforced defaults |
 

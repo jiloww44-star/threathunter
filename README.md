@@ -99,7 +99,7 @@ backend/           FastAPI platform (demo profile: SQLlite + zero-model NLP)
   app/store/       evidence/signals/hypotheses/checks/review_queue +
                     v3.0 ops_trees/ops_tasks/notifications/audit_trail/
                     custom_agents/journey_watches
-  tests/           345 tests (engine / journey / kyc / API / geo / governance /
+  tests/           347 tests (engine / journey / kyc / API / geo / governance /
                     sovereign-fusion / privacy-personalization /
                     safety-by-design / sovereign-ops / v3.4+3.5 hardening /
                     intelligence-core v4.0 / forensics-fabric v4.1 /
@@ -114,6 +114,11 @@ design/            versioned tranche mapping docs + research:
                    ContextualSystems-v1.md — Human–Context–System–Behavior
                    alignment engine run against the platform (evidence-tagged:
                    machine half = FACTs, human half = UNKNOWNs; verdict: PILOT)
+                   EgressDiagnosis-v1.md — root-cause engine (evidence →
+                   hypotheses → tests → conclusions) on live-source failures:
+                   SNI-keyed egress interception CONFIRMED via SNI-switch
+                   test + "E2B Proxy CA" cert issuer; app ruled out; shipped
+                   TH360_HTTP_CA_BUNDLE (+2 tests, 347)
   src/views/       Home · FactChecker · JourneyAdvisor · KYCFlow · Analytics · OpsNode
 seed/              Part 10 demo pack + scenarios + seeder (+ --confirm for §1.10)
                     + v3.0 asset_inventory/cve_feed fixtures

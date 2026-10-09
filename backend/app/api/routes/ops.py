@@ -495,6 +495,19 @@ async def kpis_v71(window_hours: int | None = None, db=Depends(get_db),
     return kpis_mod.compute_kpis(db, window_hours=window_hours)
 
 
+@router.get("/ops/funnel")
+async def evidence_funnel(window_hours: int | None = None, db=Depends(get_db),
+                          user=Depends(current_user)):
+    """v4.9 — the pipeline INTO the §72 north-star (ContextualSystems H3):
+    opened → observed → linked → closed → evidence-backed completed, every
+    stage measured with a basis string, conversions honest on empty
+    denominators. All-time lens mirrors the north-star; window_hours gives
+    a cohort view. RBAC-gated ('read', viewer+) like every telemetry surface."""
+    rbac.require_role(user, "read")
+    from ...core import funnel as funnel_mod
+    return funnel_mod.compute_funnel(db, window_hours=window_hours)
+
+
 @router.get("/ops/metrics")
 async def metrics(window_hours: int | None = None, db=Depends(get_db),
                   user=Depends(current_user)):

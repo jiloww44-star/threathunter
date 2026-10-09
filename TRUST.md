@@ -121,6 +121,11 @@ Rule 2 is a checklist item in the §14.5 launch gate.
 
 ---
 
+## 18. v4.9 Evidence Funnel addendum
+
+- **Funnel engine + /ops/funnel — blast radius: LOW, review D1.** Read-only aggregation over investigations/audit_trail/investigation_links through the SELECT-only kpi_sql chokepoint. The honest risks are telemetry-theater and misattribution, not data damage. Mitigations: completed ≡ kpis._north_star query-consistency is recomputed in every response and test-pinned ("a mismatch is a defect"); every stage/conversion carries a basis string; observed counts attempts (denied included) with that fact printed in the panel notes; legacy rows without a case id are pinned NOT to count.
+- **FunnelPanel UI — blast radius: NONE (presentation), review D1.** Renders absence with the same §20 sentence as the §71 plane; UNAVAILABLE conversions render as honest chips, never interpolated.
+
 ## 17. v4.8 Chronology & Reproducibility addendum
 
 - **Digest-committed chronology — blast radius: LOW-MEDIUM, review D1.** The digest is the tamper-visibility claim; if the derivation silently padded or dropped history the claim would be hollow. Mitigations: derivation is deterministic and documented in every response (id-matched trail + column-scoped links + case row; no inference beyond string equality); the tamper test edits the store directly and requires a digest flip.

@@ -7,7 +7,8 @@ import { api, type ApiError } from "../api";
 import type {
   AgentInfo, CaseChronology, CortexReply, DorkSet, GraphData, Incident,
   Investigation, KpiValue, LiveObservation, LockerResponse, MeshStatus,
-  OpsKpis, OpsKpisV71, OpsNotification, PlanProposal, RecentCheck,
+  EvidenceFunnel, OpsKpis, OpsKpisV71, OpsNotification, PlanProposal,
+  RecentCheck,
   RerouteRow, ReviewItem, StrategyMap, TaskStatus, UnifiedReport,
 } from "../types";
 import { ConfidenceMeter, ErrorPanel, TrustTag } from "../components/shared";
@@ -122,6 +123,64 @@ function V71Panel({ v71 }: { v71: OpsKpisV71 }) {
   );
 }
 
+function FunnelPanel({ funnel }: { funnel: EvidenceFunnel }) {
+  const convChip = (c: EvidenceFunnel["conversions"][number]) => {
+    if (c.status === "UNAVAILABLE") {
+      return <b className="fun-val fun-unavail" title={c.basis}>—</b>;
+    }
+    return (
+      <b className="fun-val" title={c.basis}>
+        {Math.round(Number(c.value) * 100)}%
+      </b>
+    );
+  };
+  return (
+    <div className="fun" aria-label="§72 evidence funnel — pipeline into the north-star">
+      <div className="fun-row">
+        {funnel.stages.map((s, i) => (
+          <span key={s.id} className="fun-cell">
+            {i > 0 && (
+              <span className="fun-arrow" title={funnel.conversions[i - 1].basis}>
+                <small className="fun-arrow-label">
+                  {funnel.conversions[i - 1].label.split("→")[1]}
+                </small>
+                {convChip(funnel.conversions[i - 1])}
+                <span className="fun-glyph">→</span>
+              </span>
+            )}
+            <span className="fun-stage" title={s.basis}>
+              <b className={s.id === "completed" ? "fun-num fun-num-star" : "fun-num"}>
+                {typeof s.value === "number" ? s.value : "—"}
+              </b>
+              <span className="fun-label">{s.label}</span>
+              <small className="fun-sample">n={s.sample}</small>
+            </span>
+          </span>
+        ))}
+      </div>
+      {funnel.north_star_consistency && (
+        <p
+          className={funnel.north_star_consistency.match
+            ? "fun-consistency fun-ok"
+            : "fun-consistency fun-bad"}
+          title={funnel.north_star_consistency.basis}
+        >
+          {funnel.north_star_consistency.match
+            ? `✓ funnel completed ${funnel.north_star_consistency.funnel_completed} ≡ §72 north-star ${funnel.north_star_consistency.kpis_north_star} (query-identical)`
+            : `✗ funnel ${funnel.north_star_consistency.funnel_completed} ≠ north-star ${funnel.north_star_consistency.kpis_north_star} — defect, not nuance`}
+        </p>
+      )}
+      <ul className="fun-notes dim">
+        {funnel.notes.map((n) => <li key={n}>{n}</li>)}
+      </ul>
+      <p className="dim mono" style={{ fontSize: ".72rem" }}>
+        {funnel.funnel_version} · {funnel.lens} · computed{" "}
+        {new Date(funnel.computed_at).toLocaleString()}
+      </p>
+    </div>
+  );
+}
+
 export function OpsNode() {
   const [sessionId] = useState(newSessionId);
   const [messages, setMessages] = useState<ChatMsg[]>([{
@@ -144,6 +203,7 @@ export function OpsNode() {
   const [alerts, setAlerts] = useState<OpsNotification[]>([]);
   const [feed, setFeed] = useState<RecentCheck[]>([]);
   const [kpis, setKpis] = useState<OpsKpis | null>(null);
+  const [funnel, setFunnel] = useState<EvidenceFunnel | null>(null);
   const [pane, setPane] = useState<Pane>("strategy");
   const chatEnd = useRef<HTMLDivElement>(null);
   // v3.2 safety-by-design state
@@ -244,6 +304,7 @@ export function OpsNode() {
     if (st) setStream(st);
     api.listInvestigations().then((c) => setCases(c.investigations))
       .catch(() => null);
+    api.evidenceFunnel().then(setFunnel).catch(() => null);
   }, []);
 
   useEffect(() => { refreshPanels(); }, [refreshPanels]);
@@ -2010,6 +2071,17 @@ export function OpsNode() {
                 </p>
               )}
               {/* v4.5 — §71/§72 pilot read-out (honest-degrading metrics) */}
+              <h4 style={{ marginBottom: ".3rem" }}>
+                Pipeline into the north-star (§72) — is it working?
+              </h4>
+              {funnel ? (
+                <FunnelPanel funnel={funnel} />
+              ) : (
+                <p className="muted" style={{ fontSize: ".82rem" }}>
+                  funnel engine unavailable on this backend — absence
+                  reported, numbers never fabricated (§20).
+                </p>
+              )}
               <h4 style={{ marginBottom: ".3rem" }}>
                 Platform KPIs (§71) — pilot readiness
               </h4>

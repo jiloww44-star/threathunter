@@ -625,6 +625,30 @@ export interface OpsKpisV71 {
   honesty_note: string;
 }
 
+// ---------------- v4.9 §72 evidence funnel ----------------
+/** The pipeline INTO the north-star (ContextualSystems-v1 H3): cumulative
+ *  stage counts + honest conversions; completed ≡ north-star (consistency
+ *  block proves the funnel cannot disagree with the KPI engine). */
+export type FunnelStage = KpiValue & { id: string; label: string };
+export type FunnelConversion = KpiValue & {
+  id: string; label: string; from: string; to: string;
+};
+export interface EvidenceFunnel {
+  funnel_version: string;
+  spec: string;
+  computed_at: string;
+  lens: string;
+  stages: FunnelStage[];
+  conversions: FunnelConversion[];
+  north_star_consistency: {
+    funnel_completed: number;
+    kpis_north_star: number;
+    match: boolean;
+    basis: string;
+  } | null;
+  notes: string[];
+}
+
 export interface OpsKpis {
   tasks_total: number;
   task_status_mix: Record<string, number>;

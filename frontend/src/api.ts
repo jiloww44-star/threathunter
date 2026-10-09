@@ -8,6 +8,7 @@ import type {
   DorkSet, MediaForensics, LockerResponse, ApprovalRecord,
   AgentInventoryResponse, AssuranceStatus, Whoami, Connector,
   RetentionReport, ReviewItem, RerouteRow, LiveObservation, CaseChronology,
+  EvidenceFunnel,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -142,6 +143,7 @@ export const api = {
   opsReassess: () =>
     request<{ emitted: number }>("/api/v1/ops/reassess", { method: "POST" }),
   opsKpis: () => request<OpsKpis>("/api/v1/ops/kpis"),
+  evidenceFunnel: () => request<EvidenceFunnel>("/api/v1/ops/funnel"),
 
   // ---- §5.3 consent ledger + §3.4 personalization ----
   consent: (userId: string, purpose: string, state: "granted" | "withdrawn") =>

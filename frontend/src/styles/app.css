@@ -1026,3 +1026,31 @@ textarea:focus-visible, input:focus-visible, select:focus-visible {
 .chrono-kind[data-kind="LIFECYCLE"] { color: var(--color-warn, #ffb020); }
 .chrono-kind[data-kind="AUTHORIZATION"] { color: #ff6b6b; }
 .chrono-kind[data-kind="ALERT"] { color: #ffb020; }
+
+/* ---------- v4.9 §72 evidence funnel (pipeline into the north-star) ---------- */
+.fun { border: 1px solid var(--color-border, #2c2c30); border-radius: .5rem;
+  padding: .6rem .7rem; margin-bottom: .9rem;
+  background: var(--color-panel, #141416); }
+.fun-row { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.fun-cell { display: flex; align-items: center; gap: .45rem; }
+.fun-stage { display: flex; flex-direction: column; align-items: center;
+  gap: .1rem; min-width: 6.6rem; padding: .45rem .55rem;
+  border: 1px solid var(--color-border, #2c2c30); border-radius: .45rem;
+  background: var(--color-bg, #0c0c0e); }
+.fun-num { font-size: 1.35rem; color: var(--color-text); }
+.fun-num-star { color: var(--color-accent, #cfff00); }
+.fun-label { font-size: .68rem; color: var(--color-text-dim); text-align: center; }
+.fun-sample { font-size: .64rem; color: var(--color-text-dim); }
+.fun-arrow { display: flex; flex-direction: column; align-items: center; gap: .05rem; }
+.fun-arrow-label { font-size: .58rem; color: var(--color-text-dim);
+  max-width: 5.4rem; text-align: center; }
+.fun-arrow .fun-val { font-size: .85rem; color: var(--color-text); }
+.fun-val.fun-unavail { font-size: .6rem; letter-spacing: .06em;
+  padding: .08rem .4rem; border: 1px dashed var(--color-warn, #ffb020);
+  border-radius: 99px; color: var(--color-warn, #ffb020); }
+.fun-glyph { color: var(--color-text-dim); }
+.fun-consistency { font-size: .74rem; margin: .5rem 0 .2rem; }
+.fun-consistency.fun-ok { color: var(--color-ok, #3fb950); }
+.fun-consistency.fun-bad { color: var(--color-danger, #f85149); }
+.fun-notes { font-size: .7rem; margin: .15rem 0 .35rem; padding-left: 1.1rem; }
+.fun-notes li { margin: .06rem 0; }

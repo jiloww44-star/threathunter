@@ -1,0 +1,391 @@
+// Settings — v3.0 §5.3 consent ledger + §3.4 personalization (within
+// evidence bounds) + §5.4 access modes. Privacy controls are real: consent
+// entries are hash-chained server-side; preferences never touch scoring.
+import { useCallback, useEffect, useState } from "react";
+import { api, type ApiError } from "../api";
+import type { ComplianceIndex, ConsentLedgerView, ConsentStateView, Prefs,
+  RegionsView } from "../types";
+import { ErrorPanel } from "../components/shared";
+import {
+  applyBandwidthAttr, getBandwidthMode, isLowBandwidth, setBandwidthMode,
+  type BandwidthMode,
+} from "../hooks/useBandwidth";
+
+const PURPOSE_LABEL: Record<string, string> = {
+  kyc_biometrics: "KYC biometrics",
+  personalization: "Personalization",
+  journey_history: "Journey history",
+  analytics: "Analytics",
+};
+
+const USER_KEY = "th360.user";
+
+function demoUser(): string {
+  return localStorage.getItem(USER_KEY) || "demo-operator";
+}
+
+export function Settings() {
+  const [userId, setUserId] = useState(demoUser());
+  const [consent, setConsent] = useState<Record<string, string>>({});
+  const [ledgerOk, setLedgerOk] = useState<boolean | null>(null);
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [watchInput, setWatchInput] = useState("");
+  const [mode, setMode] = useState<BandwidthMode>(getBandwidthMode());
+  const [error, setError] = useState<ApiError | null>(null);
+  const [savedNote, setSavedNote] = useState("");
+  const [ci, setCi] = useState<ComplianceIndex | null>(null);  // v3.3 §6.C
+  // v3.4 red-team #9 — region-aware consent defaults
+  const [region, setRegion] = useState("GLOBAL");
+  const [regionNotice, setRegionNotice] = useState("");
+  const [regions, setRegions] = useState<RegionsView | null>(null);
+  const [effective, setEffective] =
+    useState<ConsentStateView["effective"]>({});
+
+  const load = useCallback(async (uid: string) => {
+    setError(null);
+    try {
+      const [c, l, p, index] = await Promise.all([
+        api.consentState(uid), api.consentLedger(), api.getPrefs(uid),
+        api.complianceIndex().catch(() => null),
+      ]);
+      setConsent(c.purposes);
+      setRegion(c.region ?? "GLOBAL");
+      setRegionNotice(c.region_notice ?? "");
+      setEffective(c.effective ?? {});
+      setLedgerOk(l.verification.chain_intact);
+      setPrefs(p);
+      if (index) setCi(index);
+    } catch (e) {
+      setError(e as ApiError);
+    }
+  }, []);
+
+  useEffect(() => { load(userId); }, [userId, load]);
+  useEffect(() => {  // v3.4 — declared region catalogue, once
+    api.listRegions().then(setRegions).catch(() => null);
+  }, []);
+
+  const changeRegion = async (r: string) => {  // v3.4 red-team #9
+    setRegion(r);
+    try {
+      await api.setRegion(userId, r);
+      await load(userId);
+    } catch (e) {
+      setError(e as ApiError);
+    }
+  };
+
+  const setConsentState = async (purpose: string, state: "granted" | "withdrawn") => {
+    try {
+      await api.consent(userId, purpose, state);
+      await load(userId);
+    } catch (e) {
+      setError(e as ApiError);
+    }
+  };
+
+  const savePrefs = async (patch: Partial<Prefs>) => {
+    setSavedNote("");
+    try {
+      const next = await api.savePrefs(userId, patch);
+      setPrefs(next);
+      setSavedNote("Saved — applies to presentation & alerts only (§3.4).");
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.code === "CONSENT_REQUIRED") {
+        setError(err);
+      } else {
+        setError(err);
+      }
+    }
+  };
+
+  const pickUser = (uid: string) => {
+    const clean = uid.trim() || "demo-operator";
+    localStorage.setItem(USER_KEY, clean);
+    setUserId(clean);
+  };
+
+  const lowNow = isLowBandwidth();
+
+  return (
+    <section aria-labelledby="set-title">
+      <header className="view-head">
+        <p className="view-kicker">v3.3 · Govern — Sovereign control (blueprint v5.2 §6.C)</p>
+        <h1 id="set-title">⚖️ Govern</h1>
+        <p className="view-lede">
+          Your oversight surface: consent is hash-chained and immutable (§5.3);
+          personalization shapes presentation — <em>never</em> verdicts (§3.4);
+          the Compliance Index below is computed from local records and is an
+          indicator, not a certification.
+        </p>
+      </header>
+
+      {/* v3.3 — blueprint v5.2 §6.C: Compliance Index */}
+      {ci && (
+        <div className="card" aria-label="Compliance Index">
+          <div className="ci-head">
+            <span className="ci-score">{ci.index}</span>
+            <span className={`ci-grade${ci.grade === "REVIEW" ? " review" : ""}`}>
+              {ci.grade}
+            </span>
+            <span className="dim" style={{ fontSize: "0.78rem" }}>
+              {ci.indicator_notice}
+            </span>
+          </div>
+          {ci.components.map(c => (
+            <div key={c.key} className="ci-comp">
+              <div className="ci-comp-top">
+                <span>{c.label} <span className="dim">· {c.spec}</span></span>
+                <span className="mono">{c.score}/{c.max}</span>
+              </div>
+              <div className="ci-bar" role="presentation">
+                <div className="ci-fill"
+                     style={{ width: `${(c.score / c.max) * 100}%` }} />
+              </div>
+              <div className="ci-note">{c.note}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="card" style={{ maxWidth: 520 }}>
+        <div className="field">
+          <label htmlFor="demo-user">Demo user</label>
+          <input id="demo-user" type="text" defaultValue={userId}
+                 onBlur={(e) => pickUser(e.target.value)}
+                 onKeyDown={(e) => e.key === "Enter" &&
+                   pickUser((e.target as HTMLInputElement).value)} />
+          <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+            Demo profile identity — consent and preferences attach to this id.
+          </p>
+        </div>
+      </div>
+
+      <div className="settings-grid">
+        {/* ----------------------------- §5.3 privacy ------------------- */}
+        <div className="card" aria-label="Privacy and consent">
+          <h3 style={{ marginTop: 0 }}>🔏 Privacy & consent ledger</h3>
+          {/* v3.4 red-team #9 — region scopes DEFAULTS only; explicit ledger
+              decisions always win. The notice says so, in plain language. */}
+          <div className="region-row" style={{ marginBottom: 10 }}>
+            <label htmlFor="region-select" className="muted"
+                   style={{ fontSize: ".82rem" }}>
+              Region (scopes consent defaults):
+            </label>
+            <select id="region-select" className="field-input"
+                    value={region}
+                    onChange={e => changeRegion(e.target.value)}>
+              {regions
+                ? Object.entries(regions.regions).map(([code, r]) => (
+                    <option key={code} value={code}>
+                      {r.label}
+                    </option>
+                  ))
+                : <option value={region}>{region}</option>}
+            </select>
+            {regions && (
+              <span className="consent-origin region">
+                {regions.regions[region]?.mode ?? "opt-in"}
+              </span>
+            )}
+          </div>
+          <p className="muted" style={{ marginTop: 0, fontSize: ".82rem" }}>
+            Ledger integrity:{" "}
+            {ledgerOk === null ? "checking…" : ledgerOk
+              ? <strong style={{ color: "var(--color-evidence)" }}>
+                  ✓ hash-chain intact</strong>
+              : <strong style={{ color: "#ef4444" }}>✕ TAMPER DETECTED</strong>}
+          </p>
+          {Object.entries(PURPOSE_LABEL).map(([purpose, label]) => {
+            const state = consent[purpose] ?? "never_asked";
+            const eff = effective?.[purpose];
+            const fromRegion = eff?.origin === "region_default";
+            return (
+              <div key={purpose} className="consent-row">
+                <div>
+                  <strong>{label}</strong>
+                  <p className="muted" style={{ margin: "2px 0 0", fontSize: ".78rem" }}>
+                    {fromRegion
+                      ? <>not asked yet — <span className="consent-origin region">
+                          region default: {eff.state}</span></>
+                      : (state === "never_asked" ? "never asked" : state)}
+                  </p>
+                </div>
+                {state === "granted" ? (
+                  <button type="button" className="demo-btn"
+                          onClick={() => setConsentState(purpose, "withdrawn")}>
+                    Withdraw
+                  </button>
+                ) : (
+                  <button type="button" className="demo-btn"
+                          onClick={() => setConsentState(purpose, "granted")}>
+                    Grant
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {regionNotice && (
+            <p className="muted" style={{ fontSize: ".74rem", marginBottom: 6 }}>
+              {regionNotice}
+            </p>
+          )}
+          <p className="caveat" style={{ marginBottom: 0 }}>
+            Withdrawal is recorded as a new entry — past grants stay provable,
+            nothing is deleted. Auditors verify the chain via{" "}
+            <span className="mono">/api/v1/privacy/ledger</span>.
+          </p>
+        </div>
+
+        {/* -------------------- §3.4 personalization -------------------- */}
+        <div className="card" aria-label="Personalization">
+          <h3 style={{ marginTop: 0 }}>🎛 Personalization</h3>
+          {consent.personalization !== "granted" && (
+            <p className="muted" role="status" style={{ fontSize: ".82rem" }}>
+              Saving preferences requires the <b>Personalization</b> consent
+              above (§5.3) — nothing is stored silently.
+            </p>
+          )}
+          {error && <ErrorPanel error={error} />}
+          {savedNote && <p className="muted" role="status">{savedNote}</p>}
+          {prefs && (
+            <>
+              <div className="field">
+                <label htmlFor="pref-priority">Default route priority</label>
+                <select id="pref-priority" value={prefs.journey_priority}
+                        onChange={(e) =>
+                          savePrefs({ journey_priority: e.target.value })}>
+                  <option value="balanced">Balanced</option>
+                  <option value="safest">Safest</option>
+                  <option value="fastest">Fastest</option>
+                  <option value="lowest_exposure">Lowest exposure</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="pref-tolerance">Default alert threshold</label>
+                <select id="pref-tolerance" value={prefs.notify_tolerance}
+                        onChange={(e) =>
+                          savePrefs({ notify_tolerance: e.target.value })}>
+                  <option value="LOW">LOW — alert on any drift</option>
+                  <option value="MODERATE">MODERATE</option>
+                  <option value="HIGH">HIGH — only serious elevation</option>
+                  <option value="CRITICAL">CRITICAL — emergencies only</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="pref-format">Output format (§19)</label>
+                <select id="pref-format" value={prefs.output_format}
+                        onChange={(e) =>
+                          savePrefs({ output_format: e.target.value })}>
+                  <option value="novice">Novice — conclusion first</option>
+                  <option value="analyst">Analyst — evidence expanded</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="watch-add">Entity watchlists (v1 §22)</label>
+                <div className="chip-editor">
+                  {prefs.watchlists.map((w) => (
+                    <span key={w} className="chip">
+                      {w}
+                      <button type="button" aria-label={`Remove ${w}`}
+                              onClick={() => savePrefs({
+                                watchlists: prefs.watchlists
+                                  .filter((x) => x !== w),
+                              })}>×</button>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <input id="watch-add" type="text" value={watchInput}
+                         placeholder="e.g. Third Mainland Bridge"
+                         onChange={(e) => setWatchInput(e.target.value)} />
+                  <button type="button" className="demo-btn"
+                          disabled={!watchInput.trim()}
+                          onClick={() => {
+                            savePrefs({
+                              watchlists: [...prefs.watchlists,
+                                           watchInput.trim()],
+                            });
+                            setWatchInput("");
+                          }}>
+                    Add
+                  </button>
+                </div>
+                <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+                  Watched entities trigger <b>alerts</b> when new signals
+                  arrive (§1.10 loop) — never verdict changes.
+                </p>
+              </div>
+            </>
+          )}
+          <p className="caveat" style={{ marginBottom: 0 }}>
+            “Personalization shapes presentation, not conclusions.” — §3.4,
+            enforced by the test suite.
+          </p>
+        </div>
+
+        {/* ------------------------- §5.4 access ------------------------ */}
+        <div className="card" aria-label="Access modes">
+          <h3 style={{ marginTop: 0 }}>📶 Access & bandwidth (§5.4)</h3>
+          <div className="field">
+            <label htmlFor="bw-mode">Bandwidth mode</label>
+            <select id="bw-mode" value={mode}
+                    onChange={(e) => {
+                      const m = e.target.value as BandwidthMode;
+                      setMode(m);
+                      setBandwidthMode(m);
+                    }}>
+              <option value="auto">Auto — follow my device (Save-Data / 2G)</option>
+              <option value="on">Always low — text-first everywhere</option>
+              <option value="off">Full — maps & rich visuals</option>
+            </select>
+          </div>
+          <p className="muted" style={{ fontSize: ".82rem" }}>
+            Current: <strong>{lowNow ? "LOW-bandwidth (text-first)" :
+            "full"}</strong>. In low-bandwidth mode, map tiles are skipped and
+            journeys render as text risk strips with identical information.
+          </p>
+          <p className="muted" style={{ fontSize: ".82rem", marginBottom: 0 }}>
+            Motion communicates state throughout; your OS{" "}
+            <span className="mono">prefers-reduced-motion</span> setting is
+            honored automatically across every view.
+          </p>
+        </div>
+
+        {/* ------------- v3.2 Data & Sessions (review blocker E) ------ */}
+        <div className="card" aria-label="Data and sessions">
+          <h3 style={{ marginTop: 0 }}>🗂 Data &amp; sessions</h3>
+          <p className="muted" style={{ fontSize: ".82rem" }}>
+            Your watchlists, preferences and journey watches are personal
+            data — delete them here, permanently. Generated reports can be
+            deleted individually in the Ops Node timeline. The consent ledger
+            is retained by design: it is the §5.3 audit proof of your
+            choices and holds only your pseudonymous id.
+          </p>
+          {savedNote && <p className="muted" role="status">{savedNote}</p>}
+          <div className="btn-row">
+            <button type="button" className="demo-btn"
+                    style={{ color: "#ef4444", borderColor: "#ef4444" }}
+                    onClick={async () => {
+                      if (!window.confirm(
+                        `Permanently delete preferences, watchlists and `
+                        + `journey watches for "${userId}"?`)) return;
+                      try {
+                        await api.deleteUserData(userId);
+                        setSavedNote(
+                          "Personal data deleted — consent ledger retained "
+                          + "as audit proof (declared policy).");
+                        await load(userId);
+                      } catch (e) {
+                        setError(e as ApiError);
+                      }
+                    }}>
+              Delete my data
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

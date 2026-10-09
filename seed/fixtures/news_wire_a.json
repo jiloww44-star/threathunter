@@ -1,0 +1,29 @@
+{
+  "designed_to_test": "corroboration (demo scenario 1, Part 10.6)",
+  "published_at": "2026-08-15T09:00:00Z",
+  "articles": [
+    {
+      "id": "art-001",
+      "headline": "Company X placed on sanctions list, officials confirm",
+      "body": "Company X was sanctioned on 14 August 2026 following a regulatory review. The wire service learned of the listing from regulatory documents shared with accredited press.",
+      "entities": ["Company X"],
+      "entity": "Company X",
+      "event_type": "sanction",
+      "event_date": "2026-08-14",
+      "location": "Lagos",
+      "supports_claim": true,
+      "designed_to_test": "corroboration"
+    },
+    {
+      "id": "art-004",
+      "headline": "New cargo scanning rules at Lagos port draw industry criticism",
+      "body": "Terminal operators criticized new cargo scanning rules announced for Lagos port as unworkable within the 30-day deadline.",
+      "entities": ["Lagos Port"],
+      "entity": "Lagos Port",
+      "event_type": "regulatory action",
+      "event_date": "2026-08-15",
+      "location": "Lagos",
+      "supports_claim": null
+    }
+  ]
+}

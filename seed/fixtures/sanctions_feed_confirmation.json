@@ -1,0 +1,18 @@
+{
+  "designed_to_test": "Scenario 5 (Part 10.6): reseed with official confirmation → VERIFIED/VERY_HIGH",
+  "headline": "Federal Regulatory Gazette — Official Confirmation Notice",
+  "published_at": "2026-08-24T06:00:00Z",
+  "entries": [
+    {
+      "id": "gaz-101",
+      "headline": "Official confirmation: Company X sanctioned",
+      "body": "The regulatory authority officially confirms that Company X was sanctioned on 14 August 2026 following the conclusion of its regulatory review. The listing covers the Company X group including its holding entity.",
+      "entities": ["Company X", "Company X Holdings"],
+      "entity": "Company X",
+      "event_type": "sanction",
+      "event_date": "2026-08-14",
+      "location": "Abuja",
+      "supports_claim": true
+    }
+  ]
+}

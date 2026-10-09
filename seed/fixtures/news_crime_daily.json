@@ -1,0 +1,30 @@
+{
+  "designed_to_test": "low-reliability source must not drive verdicts (§1.6 weighting)",
+  "published_at": "2026-08-16T13:00:00Z",
+  "articles": [
+    {
+      "id": "art-007",
+      "headline": "Rumors swirl of secret celebrity wedding in Lagos",
+      "body": "Unverified rumors and anonymous sources claim a celebrity secretly married in Lagos last week. No documentation, venue record, or witness statement could be confirmed.",
+      "entities": ["Celebrity"],
+      "entity": "Celebrity",
+      "event_type": null,
+      "event_date": "2026-08-16",
+      "location": "Lagos",
+      "supports_claim": null,
+      "designed_to_test": "source_weighting"
+    },
+    {
+      "id": "art-008",
+      "headline": "Company X staff reportedly leaving after sanction news",
+      "body": "Unnamed sources claim staff have started leaving Company X following reports it was sanctioned, though the company itself has not commented.",
+      "entities": ["Company X"],
+      "entity": "Company X",
+      "event_type": "sanction",
+      "event_date": "2026-08-18",
+      "location": "Lagos",
+      "supports_claim": true,
+      "designed_to_test": "low_reliability_corroboree"
+    }
+  ]
+}

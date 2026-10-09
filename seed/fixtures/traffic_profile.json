@@ -1,0 +1,21 @@
+{
+  "designed_to_test": "Journey mobility risk fusion (Part 5)",
+  "profiles": {
+    "urban": {
+      "night": 0.08, "early_morning": 0.12, "morning_peak": 0.55,
+      "day": 0.25, "evening_peak": 0.6, "evening": 0.35
+    },
+    "expressway": {
+      "night": 0.1, "early_morning": 0.08, "morning_peak": 0.35,
+      "day": 0.2, "evening_peak": 0.45, "evening": 0.3
+    },
+    "bridge": {
+      "night": 0.05, "early_morning": 0.1, "morning_peak": 0.5,
+      "day": 0.25, "evening_peak": 0.55, "evening": 0.3
+    },
+    "standard": {
+      "night": 0.1, "early_morning": 0.1, "morning_peak": 0.4,
+      "day": 0.2, "evening_peak": 0.45, "evening": 0.3
+    }
+  }
+}

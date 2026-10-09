@@ -1,0 +1,310 @@
+{
+  "designed_to_test": "Journey risk timeline (scenario 3: night vs day comparison)",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.62,
+          6.825
+        ]
+      },
+      "properties": {
+        "type": "security incident",
+        "subtype": "armed_robbery_report",
+        "timestamp": "2026-08-10T21:40:00Z",
+        "segment": "Lagos-Ibadan Expressway km 42",
+        "severity": "HIGH",
+        "time_of_day": "night",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.615,
+          6.822
+        ]
+      },
+      "properties": {
+        "type": "security incident",
+        "subtype": "vehicle_attack",
+        "timestamp": "2026-07-28T22:10:00Z",
+        "segment": "Lagos-Ibadan Expressway km 42",
+        "severity": "HIGH",
+        "time_of_day": "night",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.905,
+          7.378
+        ]
+      },
+      "properties": {
+        "type": "traffic fatality",
+        "subtype": "collision",
+        "timestamp": "2026-08-12T07:15:00Z",
+        "segment": "Ibadan approach corridor",
+        "severity": "MODERATE",
+        "time_of_day": "morning_peak",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.618,
+          6.828
+        ]
+      },
+      "properties": {
+        "type": "criminal activity",
+        "subtype": "smash_and_grab",
+        "timestamp": "2026-08-19T20:05:00Z",
+        "segment": "Lagos-Ibadan Expressway km 42",
+        "severity": "MODERATE",
+        "time_of_day": "night",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.3589,
+          6.6018
+        ]
+      },
+      "properties": {
+        "type": "infrastructure outage",
+        "subtype": "power_cut",
+        "timestamp": "2026-08-21T14:00:00Z",
+        "segment": "Ikeja district",
+        "severity": "LOW",
+        "time_of_day": "day",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.891,
+          7.3775
+        ]
+      },
+      "properties": {
+        "type": "natural disaster",
+        "subtype": "flash_flood",
+        "timestamp": "2026-08-18T16:45:00Z",
+        "segment": "Ibadan approach corridor",
+        "severity": "MODERATE",
+        "time_of_day": "evening_peak",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.52,
+          6.72
+        ]
+      },
+      "properties": {
+        "type": "security incident",
+        "subtype": "checkpoint_extortion",
+        "timestamp": "2026-08-05T23:30:00Z",
+        "segment": "Ogun river bridge",
+        "severity": "MODERATE",
+        "time_of_day": "night",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.379,
+          6.5244
+        ]
+      },
+      "properties": {
+        "type": "security incident",
+        "subtype": "cult_clash",
+        "timestamp": "2026-08-22T22:50:00Z",
+        "segment": "Mushin corridor",
+        "severity": "HIGH",
+        "time_of_day": "night",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.8955,
+          7.391
+        ]
+      },
+      "properties": {
+        "type": "traffic congestion",
+        "subtype": "truck_pileup",
+        "timestamp": "2026-08-11T08:05:00Z",
+        "segment": "Ibadan approach corridor",
+        "severity": "LOW",
+        "time_of_day": "morning_peak",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.605,
+          6.818
+        ]
+      },
+      "properties": {
+        "type": "security incident",
+        "subtype": "robbery_attempt",
+        "timestamp": "2026-06-30T23:00:00Z",
+        "segment": "Lagos-Ibadan Expressway km 42",
+        "severity": "MODERATE",
+        "time_of_day": "night",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.359,
+          6.602
+        ]
+      },
+      "properties": {
+        "type": "criminal activity",
+        "subtype": "pickpocketing_spree",
+        "timestamp": "2026-08-17T12:20:00Z",
+        "segment": "Ojota transit hub",
+        "severity": "LOW",
+        "time_of_day": "day",
+        "source": "security_services"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          3.4,
+          6.64
+        ]
+      },
+      "properties": {
+        "type": "traffic congestion",
+        "subtype": "fuel_tanker_blockage",
+        "timestamp": "2026-08-09T17:30:00Z",
+        "segment": "Kara bridge",
+        "severity": "MODERATE",
+        "time_of_day": "evening_peak",
+        "source": "security_services"
+      }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                3.402,
+                6.545
+            ]
+        },
+        "properties": {
+            "type": "security incident",
+            "subtype": "vehicle_break_in_report",
+            "timestamp": "2026-08-18T18:40:00Z",
+            "segment": "Third Mainland Bridge approach",
+            "severity": "MODERATE",
+            "time_of_day": "evening_peak",
+            "source": "security_services"
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                3.4,
+                6.548
+            ]
+        },
+        "properties": {
+            "type": "mobility incident",
+            "subtype": "multi_vehicle_collision",
+            "timestamp": "2026-08-22T17:55:00Z",
+            "segment": "Third Mainland Bridge approach",
+            "severity": "MODERATE",
+            "time_of_day": "evening_peak",
+            "source": "traffic_reports"
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                3.405,
+                6.54
+            ]
+        },
+        "properties": {
+            "type": "security incident",
+            "subtype": "armed_robbery_report",
+            "timestamp": "2026-08-20T21:05:00Z",
+            "segment": "Third Mainland Bridge approach",
+            "severity": "HIGH",
+            "time_of_day": "night",
+            "source": "security_services"
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                3.418,
+                6.448
+            ]
+        },
+        "properties": {
+            "type": "mobility incident",
+            "subtype": "junction_gridlock_report",
+            "timestamp": "2026-08-19T18:20:00Z",
+            "segment": "Adeniji Adele–Ozumba Mbadiwe descent",
+            "severity": "LOW",
+            "time_of_day": "evening_peak",
+            "source": "traffic_reports"
+        }
+    }
+  ]
+}

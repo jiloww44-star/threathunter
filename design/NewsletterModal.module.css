@@ -1,0 +1,405 @@
+/* ==========================================================================
+   NewsletterModal.module.css — audited & redesigned drop-in replacement
+   --------------------------------------------------------------------------
+   Keeps every original class name + your token system (paper/forest/cream).
+   Audit findings addressed:
+
+   1. [CRITICAL] Mobile clipping: in column-flex mode (max-width:767px) flex
+      items kept default `min-height:auto`, so `.left { overflow:auto }`
+      could never shrink — content was CLIPPED inside a fixed 90vh container
+      with `overflow:hidden`. Fix: `min-height: 0` on panels + mobile scroll
+      moves to the container itself.
+   2. [A11Y/IA] Mobile order inverted: brand panel sat AFTER the form
+      (context below the fold). Fix: `order: -1` brand strip on top, compact.
+   3. [A11Y] Close button: 44px target but transparent "×" at rest — weak
+      affordance, and 1.5rem glyph rarely sits optically centered.
+      Fix: rest-state hairline, optical centering, press feedback.
+   4. [CONSISTENCY] hard-coded 12px offsets → spacing tokens throughout.
+   5. [FORM] Under 480px the wrapped subscribe button ran text-width only —
+      now full-row (48px thumb zone reads as a primary CTA).
+   6. [TYPE] `.rightTitle { line-height: .95 }` clipped descenders on display
+      faces — 1.0 floor.
+   7. [RENDER] `color-scheme: light` declared twice — now once (container).
+   8. [TOKEN/CONTRAST] statusError/statusSuccess: use ≥4.5:1 tokens on
+      paper-50 (verify `--color-error` ≥ #b3261e family); meta opacity raised.
+   9. [POLISH] scrim gains a subtle blur behind @supports; container gets
+      ring line; status text gets a reserved inline layout hint.
+   10. [JS NOTES — out of CSS scope, see NewsletterModal.tsx] focus trap,
+       Esc-to-close, scroll lock, `role="status"`/`aria-live` on .status,
+       `aria-label` on the close button.
+   ========================================================================== */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  padding: var(--space-fluid-sm, 1rem);
+  background: var(--modal-scrim);
+}
+
+@supports ((-webkit-backdrop-filter: blur(2px)) or (backdrop-filter: blur(2px))) {
+  .overlay {
+    background: color-mix(in srgb, var(--modal-scrim) 88%, transparent);
+    -webkit-backdrop-filter: blur(3px) saturate(0.9);
+    backdrop-filter: blur(3px) saturate(0.9);
+  }
+}
+
+.container {
+  /* color-scheme belongs here, once (audit #7) */
+  color-scheme: light;
+
+  display: flex;
+  width: min(var(--modal-width), 95vw);
+  max-height: min(var(--modal-height), 90vh);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+
+  background: var(--color-paper-50);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-elevated);
+  border: 1px solid var(--color-rule-200);
+  /* skin-line ring keeps the card legible over busy imagery */
+  outline: 1px solid rgb(0 0 0 / 0.04);
+  outline-offset: -1px;
+  color: var(--color-forest-900);
+  animation: newsletter-pop-in var(--duration-base) var(--ease-out-expo);
+}
+
+.closeButton {
+  position: absolute;
+  top: var(--space-fluid-xs, 12px);      /* tokens, not literals (audit #4) */
+  right: var(--space-fluid-xs, 12px);
+  z-index: 1;
+
+  display: grid;
+  place-items: center;
+
+  width: var(--touch-min);
+  height: var(--touch-min);
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+
+  /* visible affordance at rest (audit #3) */
+  border: 1px solid var(--color-rule-200);
+  border-radius: var(--radius-full);
+  background: var(--color-paper-50);
+  color: var(--color-forest-900);
+
+  font-family: var(--font-family-ui);
+  font-size: 1.35rem;                    /* was 1.5rem */
+  line-height: 0;                        /* optical centering of "×" (#3) */
+  padding-bottom: 2px;                   /* optically true center */
+
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out-expo),
+    border-color var(--duration-fast) var(--ease-out-expo),
+    color var(--duration-fast) var(--ease-out-expo),
+    transform var(--duration-fast) var(--ease-out-expo);
+}
+
+.closeButton:hover {
+  background: var(--color-paper-100);
+  border-color: var(--color-rule-300, var(--color-rule-200));
+}
+
+.closeButton:active {
+  transform: scale(0.94);                /* press feedback (#3) */
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.left {
+  flex: 1 1 55%;
+  min-height: 0;                          /* CRITICAL fix (audit #1) */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-fluid-sm, 1rem);
+  padding: var(--space-fluid-lg, clamp(1.5rem, 3vw, 2.5rem));
+  /* guarantee title never collides with the close button (#3) */
+  padding-right: calc(var(--space-fluid-lg, 2.5rem) + var(--touch-min) / 2);
+  overflow: auto;
+  overscroll-behavior: contain;           /* no scroll-chaining to the page */
+}
+
+.right {
+  flex: 1 1 45%;
+  min-height: 0;                          /* CRITICAL fix (audit #1) */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-fluid-sm, 1rem);
+  padding: var(--space-fluid-lg, clamp(1.75rem, 3vw, 3rem));
+  background-color: var(--color-forest-950);
+  color: var(--color-cream-50);
+  overflow: auto;                         /* symmetrical with .left (#1) */
+}
+
+.leftKicker {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-action);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: var(--text-fluid-lg, clamp(1.5rem, 2.5vw + 1rem, 2.5rem));
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: var(--color-forest-900);
+  text-wrap: balance;                     /* modern headline rag control */
+}
+
+.copy {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: var(--text-fluid-sm, clamp(0.875rem, 1vw + 0.7rem, 1.125rem));
+  line-height: 1.6;
+  color: var(--color-forest-900);
+  max-inline-size: 62ch;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: var(--space-fluid-xs, 0.75rem);
+}
+
+.input {
+  flex: 1 1 220px;
+  min-height: var(--touch-min);
+  padding: 0 1rem;
+
+  border: 1px solid var(--color-rule-200);
+  border-radius: var(--radius, 0.5rem);
+  background: var(--color-paper-50);
+  color: var(--color-forest-900);
+
+  font-family: var(--font-family-ui);
+  font-size: var(--text-fluid-sm, 1rem);
+
+  transition:
+    border-color var(--duration-fast) var(--ease-out-expo),
+    box-shadow var(--duration-fast) var(--ease-out-expo);
+}
+
+.input::placeholder {
+  color: var(--color-ink-muted);
+  opacity: 0.75;
+}
+
+.input:hover {
+  border-color: var(--color-rule-300, var(--color-rule-200));
+}
+
+/* focus ring + soft glow; button still outlined via :focus-visible */
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 30%, transparent);
+}
+
+.button {
+  min-height: var(--touch-min);
+  padding: 0 1.25rem;
+
+  border: 0;
+  border-radius: var(--radius, 0.5rem);
+  background-color: var(--color-action);
+  color: var(--color-paper-50);
+
+  font-family: var(--font-family-ui);
+  font-size: var(--text-fluid-sm, 1rem);
+  font-weight: 600;
+
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out-expo),
+    transform var(--duration-fast) var(--ease-out-expo);
+}
+
+.button:hover {
+  background-color: var(--color-action-hover);
+}
+
+.button:active {
+  transform: translateY(1px);             /* press feedback */
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.status {
+  min-height: 1.25rem;
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 0.875rem;
+  /* pair with role="status" aria-live="polite" in markup (audit #6/JS notes) */
+}
+
+.statusError {
+  /* verify token ≥ 4.5:1 on paper-50 — #b3261e family or darker (audit #8) */
+  color: var(--color-error);
+}
+
+.statusSuccess {
+  /* verify token ≥ 4.5:1 on paper-50 — #146c2e family or darker */
+  color: var(--color-success);
+}
+
+.featured {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 0.875rem;
+  color: var(--color-forest-900);
+}
+
+.featuredLink {
+  color: var(--color-action);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  border-radius: 2px;
+}
+
+.featuredLink:hover {
+  color: var(--color-action-hover);
+}
+
+.featuredLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.rightKicker {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-pulse);
+}
+
+.rightTitle {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: var(--text-fluid-xl, clamp(2.25rem, 4.5vw + 1rem, 4rem));
+  line-height: 1;                        /* was .95 — descender safe (#6) */
+  letter-spacing: -0.015em;
+  color: var(--color-cream-50);
+  text-wrap: balance;
+}
+
+.rightRule {
+  width: 72px;
+  height: 1px;
+  background: var(--color-cream-50);
+  opacity: 0.45;
+}
+
+.rightMeta {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 0.875rem;
+  letter-spacing: 0.04em;
+  color: var(--color-cream-50);
+  opacity: 0.88;                          /* was .82 — contrast floor (#8) */
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes newsletter-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .container {
+    animation: none;
+  }
+
+  .closeButton,
+  .input,
+  .button {
+    transition: none;
+  }
+
+  .closeButton:active,
+  .button:active {
+    transform: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .container {
+    flex-direction: column;
+    overflow-y: auto;                     /* scroll lives HERE now (#1) */
+  }
+
+  .left,
+  .right {
+    flex: 1 1 auto;
+    overflow: visible;                    /* mobile: no nested scroll trap */
+  }
+
+  .left {
+    padding-right: var(--space-fluid-lg, 1.5rem);
+    padding-top: calc(var(--space-fluid-lg, 1.5rem) + var(--touch-min) / 2);
+  }
+
+  .right {
+    order: -1;                            /* brand context BEFORE form (#2) */
+    padding: calc(var(--space-fluid-lg, 1.5rem) + var(--touch-min) / 2)
+             var(--space-fluid-lg, 1.5rem)
+             var(--space-fluid-lg, 1.5rem);
+    gap: 0.5rem;
+  }
+
+  .rightTitle {
+    font-size: var(--text-fluid-lg, clamp(1.5rem, 3vw + 1rem, 2.5rem));
+  }
+
+  .rightRule {
+    display: none;                        /* compact brand strip (#2) */
+  }
+}
+
+@media (max-width: 479px) {
+  /* full-row primary CTA — thumb ergonomics + visual weight (audit #5) */
+  .button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}

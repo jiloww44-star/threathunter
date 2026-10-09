@@ -1,0 +1,31 @@
+# Budget engine config — spec §"Free-Tier Stack Integration" 2.4 + 3.3.
+# Any purpose may further declare min_free_only_when_capped / hard cutoff.
+_default:
+  daily_cap_usd: 0.50
+  monthly_cap_usd: 10.00
+  min_free_only_when_capped: true
+
+purposes:
+  factcheck:
+    daily_cap_usd: 1.00
+    monthly_cap_usd: 20.00
+    min_free_only_when_capped: true
+  journey:
+    daily_cap_usd: 0.50
+    monthly_cap_usd: 10.00
+    min_free_only_when_capped: true
+  kyc:
+    daily_cap_usd: 1.00
+    monthly_cap_usd: 30.00
+    min_free_only_when_capped: false   # KYC has NO degraded mode (§3.3)
+  firecrawl:
+    # free tier ≈ 500 credits/month ≈ ~500 scrapes ($0.01/ea accounting)
+    daily_cap_usd: 0.15              # ≈15 scrapes/day sustained
+    monthly_cap_usd: 5.00            # ≈500 scrape credits/month
+    min_free_only_when_capped: true
+
+  # §2.4 free-tier allocation (500 credits/month)
+credit_allocation:
+  priority_1_official: 200           # sanctions/gazette scrapes
+  priority_2_entity_search: 200      # entity-triggered discovery
+  reserve_breaking: 100              # analyst-triggered deep crawls

@@ -1,0 +1,71 @@
+# Demo source registry — spec Part 10.2 (+ Part 2.2 registry format).
+# Each source carries reliability, authority and an independence_group so the
+# engine can distinguish 5 independent sources from 1 source copied 5 times.
+sources:
+  - id: demo_gazette_official
+    type: regulatory
+    method: file
+    path: "fixtures/sanctions_feed.json"
+    reliability: HIGH
+    authority: PRIMARY
+    independence_group: government
+
+  - id: demo_wire_a
+    type: news
+    method: file
+    path: "fixtures/news_wire_a.json"
+    reliability: MODERATE
+    authority: SECONDARY
+    independence_group: press_a
+
+  - id: demo_wire_b            # deliberately copies wire_a → tests §1.6
+    type: news
+    method: file
+    path: "fixtures/news_wire_b.json"
+    reliability: MODERATE
+    authority: SECONDARY
+    independence_group: press_a   # SAME group as wire_a → one effective source
+
+  - id: demo_independent_c
+    type: news
+    method: file
+    path: "fixtures/news_independent_c.json"
+    reliability: HIGH
+    authority: SECONDARY
+    independence_group: press_c
+
+  - id: demo_crime_daily
+    type: news
+    method: file
+    path: "fixtures/news_crime_daily.json"
+    reliability: LOW
+    authority: SECONDARY
+    independence_group: press_tabloid
+
+  - id: demo_incident_geojson
+    type: threat_intel
+    method: file
+    path: "fixtures/incidents.geojson"
+    reliability: HIGH
+    authority: PRIMARY
+    independence_group: security_services
+
+# ─── §2 Free-Tier Stack: Firecrawl examples (activate by setting FIRECRAWL_API_KEY)
+#   without a key these are intentionally disabled — keep demo deterministic.
+# - id: gov_gazette_portal
+#   type: regulatory
+#   method: firecrawl
+#   firecrawl: {mode: scrape, url: "https://gazette.example.gov/sanctions",
+#               formats: ["markdown"], only_main_content: true}
+#   reliability: HIGH
+#   authority: PRIMARY
+#   independence_group: government
+#   freshness_sla_hours: 24
+# - id: news_discovery
+#   type: news
+#   method: firecrawl_search
+#   firecrawl: {mode: search, limit: 10,
+#               query_template: '"{entity}" sanction OR investigation OR arrest'}
+#   reliability: MODERATE
+#   authority: SECONDARY
+#   independence_group: dynamic   # §2.2 — assigned post domain-classification
